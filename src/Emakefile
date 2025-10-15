@@ -1,0 +1,8 @@
+{
+	["*/*"],
+	[
+		{i, "./include" },
+		{outdir, "./ebin/"},
+		report
+	  ]
+}.

@@ -1,0 +1,11 @@
+# 默认忽略的文件
+/shelf/
+/workspace.xml
+# 忽略 Erlang 编译输出
+ebin/*.beam
+**/ebin/*.beam
+*.beam
+
+
+# 忽略临时文件
+*.log
