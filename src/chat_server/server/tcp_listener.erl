@@ -24,7 +24,7 @@ init([]) ->
 	{ok, ListenSocket} = gen_tcp:listen(?LISTEN_PORT, [
 		binary,
 		{packet, 4},
-		{active, false},
+		{active, once},
 		{reuseaddr, true},
 		{backlog, 128}
 	]),

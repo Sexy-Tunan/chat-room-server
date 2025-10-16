@@ -69,10 +69,10 @@ compile: $(BEAMS)
 # ----------------------------------------
 # 启动应用
 # 自动把模块目录加入到代码载入器的搜索路径列表中
-PA_PATHS = -pa $(EBIN_DIR)
+PA_PATHS = -pa $(EBIN_DIR) _build/default/lib/jsx/ebin/
 
 application: compile
-	$(ERL) $(PA_PATHS)
+	$(ERL) $(PA_PATHS) -s main start
 
 # ----------------------------------------
 # 清理
