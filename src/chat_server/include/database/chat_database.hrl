@@ -2,5 +2,10 @@
 -record(user,{name,password}).
 -record(channel, {name, creator, alive}).
 -record(msg, {user_name, channel_name, time, message}).
+-record(channel_user, {channel_name, user_name}).
 
+
+%% 缓存频道进程与对应pid的关系
+-record(channel_pid, {channel_name, pid}).
+-record(user_pid, {user_name, pid}).
 

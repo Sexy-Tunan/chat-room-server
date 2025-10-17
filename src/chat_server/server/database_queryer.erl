@@ -15,9 +15,14 @@
 
 %% API
 -export([start/1,stop/0]).
--export([init/1,query_user_message_by/1, handle_call/3, handle_info/2, handle_cast/2]).
+-export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
+%% 用户查询api
+-export([query_user_message_by_user_name/1,query_user_message_by_channel_name/1]).
+%% 频道查询api
+-export([query_all_channel_name_alive/0]).
 
--spec query_user_message_by(user_name()) -> user_message().
+
+-spec query_user_message_by_user_name(user_name()) -> user_message().
 -type user_name() :: string().
 -type user_message() :: {ok,#user{}} | {error, no_table} | user_not_found.
 
@@ -28,7 +33,7 @@
 
 %% 启停方法
 start(IsNeedInitData) ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [IsNeedInitData], []).
+	gen_server:start({local, ?MODULE}, ?MODULE, [IsNeedInitData], []).
 
 stop() ->
 	gen_server:call(?MODULE, stop).
@@ -36,8 +41,11 @@ stop() ->
 %% API 接口
 
 %% @doc 根据用户名查询用户信息
-%% @return
-query_user_message_by(UserName) -> gen_server:call(?MODULE,{query_user, table_name, user, user_name, UserName}).
+query_user_message_by_user_name(UserName) -> gen_server:call(?MODULE,{query_user, user, user_name, UserName}).
+%% @doc 根据频道名字其所属的用户信息
+query_user_message_by_channel_name(ChannelName) -> gen_server:call(?MODULE,{query_user, user, channel_name, ChannelName}).
+%% @doc 查询所有未删除的频道名字
+query_all_channel_name_alive() -> gen_server:call(?MODULE,{query_channel, alive, channel}).
 
 %% ====================================================================
 %% 初始化方法
@@ -47,7 +55,8 @@ init([IsNeedInitData]) ->
 	TablesInfo = [
 		{user,    "data/user.dets",    user_ets,    #user.name},
 		{msg,     "data/msg.dets",     msg_ets,     #msg.user_name},
-		{channel, "data/channel.dets", channel_ets, #channel.name}
+		{channel, "data/channel.dets", channel_ets, #channel.name},
+		{channel_user, "data/channel.dets", channel_user_ets, #channel_user.channel_name}
 	],
 	Tables = load_all_dets_to_ets(TablesInfo),
 	case IsNeedInitData of
@@ -101,7 +110,7 @@ init_data(Tables) ->
 %% =======================================================================
 %% 回调方法
 %% 根据用户名查询用户信息
-handle_call({query_user, table_name, TableName, user_name, UserName}, _From, State) ->
+handle_call({query_user, TableName, user_name, UserName}, _From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName, Tables, undefined) of
 		undefined -> {reply, {error, no_table}, State};
@@ -111,6 +120,26 @@ handle_call({query_user, table_name, TableName, user_name, UserName}, _From, Sta
 				[] -> {reply, not_found, State}
 			end
 	end;
+%% 根据频道名字查询用户信息
+handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName, Tables, undefined) of
+		undefined -> {reply, {error, no_table}, State};
+		#{ets := Ets} ->
+			case ets:match(Ets, {_,ChannelName,'$1'}) of
+				UserNameList -> {reply, {ok, UserNameList}, State};
+				[] -> {reply, not_found, State}
+			end
+	end;
+%% 查询所有存活的频道名字
+handle_call({query_channel, alive, TableName},_From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			ets:match(Ets, {'$1', _, true})
+	end;
+
 
 handle_call(stop, _From, State) ->
 	#state{tables = Tables} = State,
