@@ -10,10 +10,12 @@
 -author("Administrator").
 -behavior(gen_server).
 
+-define(WORLD_CHANNEL_NAME, "world").
+
 %% API
 -export([start/0,stop/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
--export([query_channel_pid/1, register_channel/1, revoke_channel/1]).
+-export([query_channel_pid/1, register_channel/2, revoke_channel/2]).
 
 
 -include("../include/database/chat_database.hrl").
@@ -45,10 +47,8 @@ init([]) ->
 %% ==================================================================================
 %% API
 query_channel_pid(ChannelName) -> gen_server:call(?MODULE, {query_pid, ChannelName}).
-register_channel(ChannelName) -> gen_server:call(?MODULE, {register, ChannelName}).
-revoke_channel(ChannelName) -> gen_server:call(?MODULE, {revoke, ChannelName}).
-
-
+register_channel(Creator,ChannelName) -> gen_server:call(?MODULE, {register, Creator, ChannelName}).
+revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter, ChannelName}).
 
 
 
@@ -61,16 +61,28 @@ handle_call({query_pid,ChannelName}, _From, State) ->
 	{_, ChannelPid} = ets:lookup(State,ChannelName),
 	{reply, {ok, ChannelPid}, State};
 
-handle_call({register,ChannelName}, _From, State) ->
-	%% 创建频道进程
+%% 创建频道回调方法
+handle_call({register,Creator, ChannelName}, _From, State) ->
+	%% 创建频道进程并将关系写入ets内存
+	NewChannelPid = channel:start(ChannelName),
+	ets:insert(State, #channel_pid = {channel_name = ChannelName, pid = NewChannelPid}),
+	%% 数据库表新增记录
+	database_queryer:add_channel_record(Creator,ChannelName),
+	%% 通过世界频道进程将新频道信息广播给所有用户进程并通知客户端
+	{_,_,WorldPid} = ets:lookup(State,?WORLD_CHANNEL_NAME),
+	WorldPid ! {create_channel, Creator, ChannelName},
+	{reply, {ok, NewChannelPid}, State};
 
-	%% 关系写入ets内存
-	ets:insert(State,#channel_pid{}),
-	{reply, {ok, temp}, State};
+%% 管理删除频道的回调方法
+handle_call({revoke,Deleter, ChannelName}, _From, State) ->
+	%% 创建频道进程并将关系写入ets内存
+	NewChannelPid = channel:start(ChannelName),
+	ets:insert(State, #channel_pid = {channel_name = ChannelName, pid = NewChannelPid}),
+	%% 通过世界频道进程将删除的频道信息广播给所有用户进程并通知客户端
+	{_,_,WorldPid} = ets:lookup(State,?WORLD_CHANNEL_NAME),
+	WorldPid ! {delete_channel, Deleter, ChannelName},
+	{reply, ok, State};
 
-handle_call({revoke,ChannelName}, _From, State) ->
-	{_, ChannelPid} = ets:lookup(State,ChannelName),
-	{reply, {ok, ChannelPid}, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normal, stopped, State}.

@@ -2,6 +2,11 @@
 %% CLIENT --> SERVER
 -define(LOGIN_REQUEST_PROTOCOL_NUMBER, 10001).
 -define(MSG_REQUEST_PROTOCOL_NUMBER, 11001).
+-define(CHANNEL_CREAT_REQUEST_PROTOCOL_NUMBER, 12001).
+-define(CHANNEL_DELETE_REQUEST_PROTOCOL_NUMBER, 12002).
+-define(JOIN_CHANNEL_REQUEST_PROTOCOL_NUMBER, 13001).
+-define(QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER, 13002).
+
 
 
 
@@ -16,7 +21,7 @@
 -record(msg_packet,{
 	sender,
 	channel,
-	msg
+	message
 }).
 
 -record(login_packet,{
@@ -28,4 +33,26 @@
 	channel,
 	user
 }).
+
+
+%% ===========================================================
+%% 响应包格式
+-record(login_response_packet,{
+	user,
+	state,
+	%% {data ==>
+	%% 		{channels ==>
+	%% 				{channel1 ==> [usr1,user2,user3], channel2 ==> [user1,user2,user3] ......}
+	%% 		}
+	%% }
+	data
+}).
+%% 聊天消息广播返回响应包格式
+-record(msg_response_packet,{
+	sender,
+	channel,
+	message
+}).
+%%
+
 

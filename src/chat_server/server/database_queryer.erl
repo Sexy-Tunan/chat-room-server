@@ -17,7 +17,7 @@
 -export([start/1,stop/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
 %% 用户查询api
--export([query_user_message_by_user_name/1,query_user_message_by_channel_name/1]).
+-export([query_user_message_by_user_name/1,query_user_message_by_channel_name/1,add_channel_record/2,remove_channel_record/2,add_channel_user_record/2, remove_channel_user_record/2]).
 %% 频道查询api
 -export([query_all_channel_name_alive/0]).
 
@@ -41,11 +41,34 @@ stop() ->
 %% API 接口
 
 %% @doc 根据用户名查询用户信息
+%% @Return {ok,record} | {error,not_found}
 query_user_message_by_user_name(UserName) -> gen_server:call(?MODULE,{query_user, user, user_name, UserName}).
+
 %% @doc 根据频道名字其所属的用户信息
+%% @Return {ok,UserNameList} | {error,not_found}
 query_user_message_by_channel_name(ChannelName) -> gen_server:call(?MODULE,{query_user, user, channel_name, ChannelName}).
+
 %% @doc 查询所有未删除的频道名字
+%% @Return {ok,ChannelNameList} | {error,not_found}
 query_all_channel_name_alive() -> gen_server:call(?MODULE,{query_channel, alive, channel}).
+
+%% @doc 新增频道记录
+%% @Return ok | {error,exist}
+add_channel_record(Creator, ChannelName) -> gen_server:call(?MODULE,{add_channel, channel, Creator, ChannelName}).
+
+%% @doc 删除频道记录
+%% @Return ok | {error, not_creator}
+remove_channel_record(Owner, ChannelName) -> gen_server:call(?MODULE,{remove_channel, channel, Owner, ChannelName}).
+
+%% @doc 新增频道用户关系记录
+%% @Return ok
+add_channel_user_record(Member, ChannelName) -> gen_server:call(?MODULE,{add_channel_user, channel_user, Member, ChannelName}).
+
+%% @doc 删除频道用户关系记录
+%% @Return ok
+remove_channel_user_record(Member, ChannelName) -> gen_server:call(?MODULE,{remove_channel_user, channel_user, Member, ChannelName}).
+
+
 
 %% ====================================================================
 %% 初始化方法
@@ -117,9 +140,10 @@ handle_call({query_user, TableName, user_name, UserName}, _From, State) ->
 		#{ets := Ets} ->
 			case ets:lookup(Ets, UserName) of
 				[Record] -> {reply, {ok, Record}, State};
-				[] -> {reply, not_found, State}
+				[] -> {reply, {error,not_found}, State}
 			end
 	end;
+
 %% 根据频道名字查询用户信息
 handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 	#state{tables = Tables} = State,
@@ -128,18 +152,69 @@ handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 		#{ets := Ets} ->
 			case ets:match(Ets, {_,ChannelName,'$1'}) of
 				UserNameList -> {reply, {ok, UserNameList}, State};
-				[] -> {reply, not_found, State}
+				[] -> {reply, {error,not_found}, State}
 			end
 	end;
+
 %% 查询所有存活的频道名字
 handle_call({query_channel, alive, TableName},_From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
-			ets:match(Ets, {'$1', _, true})
+			ChannelNameList = ets:match(Ets, {'$1', _, true}),
+			{reply, {ok, ChannelNameList}, State}
 	end;
 
+%% 新增频道记录
+%% 特别说明：不允许存在两个相同名字的频道
+handle_call({add_channel, TableName, Creator, ChannelName},_From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% 查询是否存在相同名字的频道
+			case ets:lookup(Ets, ChannelName) of
+				ExistsRecord -> {reply, {error, exits}};
+				[] ->
+					ets:insert(Ets, #channel{name = ChannelName, creator = Creator, alive = true, create_time = calendar:now_to_local_time(os:timestamp())}),
+					{reply, ok, State}
+			end
+	end;
+
+%% 删除频道记录
+handle_call({remove_channel, TableName, Owner, ChannelName},_From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% 判断是否是频道创建者要删除频道
+			{_,Creator,_,_} = ets:lookup(Ets, ChannelName),
+			case string:equal(Creator,Owner) of
+				true -> ets:delete(Ets,ChannelName),{reply, ok, State};
+				false -> {reply, {error, not_creator}, State}
+			end
+	end;
+
+%% 新增频道用户信息记录
+handle_call({remove_channel_user, TableName, Member, ChannelName},_From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			ets:insert(Ets, #channel_user{channel_name = ChannelName, user_name = Member}),
+			{reply, ok, State}
+	end;
+
+%% 删除频道用户信息记录
+handle_call({remove_channel_user, TableName, Member, ChannelName},_From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			ets:match_delete(Ets, {ChannelName,Member}),
+			{reply, ok, State}
+	end;
 
 handle_call(stop, _From, State) ->
 	#state{tables = Tables} = State,

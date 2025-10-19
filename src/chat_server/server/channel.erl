@@ -38,8 +38,8 @@ handle_cast(_Msg, State) -> {noreply, State}.
 handle_info(stop, State) -> {stop, normal, State};
 
 handle_info({msg,SenderName,Message},State) ->
-	%% 消息广播
-	ChannelName = get(channel),
+	%% 聊天消息广播
+	ChannelName = get(channelName),
 	PidList = ets:match(State, {_,'$1'}),
 	[Pid ! {msg_broadcast,ChannelName,SenderName,Message} || Pid <- PidList],
 	{noreply, State};
@@ -48,38 +48,32 @@ handle_info({msg,SenderName,Message},State) ->
 handle_info({user_register, UserName, From},State) ->
 	%% 用户加入频道，或者用户连接了服务都需要来到频道注册自己的信息，不然无法进行广播
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
+	%% 广播其他用户有新用户加入频道
+	ChannelName = get(channelName),
+	PidList = ets:match(State, {_,'$1'}),
+	[Pid ! {user_join_channel,UserName,ChannelName} || Pid <- PidList],
 	{noreply, State};
 
 %% 用户向频道注销自己的信息
 handle_info({user_revoke, UserName},State) ->
+	ChannelName = get(channelName),
 	%% 用户websocket断联，或者退出频道都需要向频道注销自己的信息
-	io:format("用户[~p]注销频道[~p]",[UserName,get(channelName)]),
 	ets:delete(State,UserName),
+	%% 广播其他用户有新用户加入频道
+	PidList = ets:match(State, {_,'$1'}),
+	[Pid ! {user_quit_channel,UserName,ChannelName} || Pid <- PidList],
 	{noreply, State};
+
+%% 通过世界频道进程向所有用户广播新频道创建信息
+handle_info({create_channel, Creator, CreatedChannelName},State) ->
+	PidList = ets:match(State, {_,'$1'}),
+	[Pid ! {create_channel,Creator,CreatedChannelName} || Pid <- PidList],
+	{noreply, State};
+
+%% 通过世界频道进程向所有用户广播频道删除信息
+handle_info({delete_channel, Deleter, DeletedChannelName},State) ->
+	PidList = ets:match(State, {_,'$1'}),
+	[Pid ! {delete_channel,Deleter,DeletedChannelName} || Pid <- PidList],
+	{noreply, State};
+
 handle_info(_Info, State) -> {noreply, State}.
-
-
-loop(Name, Users) ->
-	receive
-		{join, UserPid} ->
-			io:format("[~p] 用户加入: ~p~n", [Name, UserPid]),
-			loop(Name, maps:put(UserPid, true, Users));
-
-		{leave, UserPid} ->
-			io:format("[~p] 用户离开: ~p~n", [Name, UserPid]),
-			loop(Name, maps:remove(UserPid, Users));
-
-		{broadcast, FromPid, Msg} ->
-			io:format("[~p] 广播消息: ~p~n", [Name, Msg]),
-			lists:foreach(
-				fun(U) ->
-					U ! {channel_msg, Name, Msg}
-				end,
-				maps:keys(Users)
-			),
-			loop(Name, Users);
-
-		stop ->
-			io:format("[~p] 已停止~n", [Name]),
-			ok
-	end.

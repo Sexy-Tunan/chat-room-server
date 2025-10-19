@@ -8,6 +8,8 @@
 -include("../include/protocol/chat_protocol.hrl").
 -include("../include/database/chat_database.hrl").
 
+-define(WORLD_CHANNEL_NAME, "world").
+
 start(Socket) ->
 	process_flag(trap_exit, true),
 	receive
@@ -47,7 +49,7 @@ login_check(JsonBin) ->
 	DataMpa = jsx:decode(JsonBin, [return_maps, {labels, atom}]),
 	UserName = maps:get(userName, DataMpa),
 	Password = maps:get(password, DataMpa),
-	case database_queryer:query_user_message_by(binary_to_list(UserName)) of
+	case database_queryer:query_user_message_by_user_name(binary_to_list(UserName)) of
 		{ok, User} -> string:equal(binary_to_list(Password), User#user.password);
 		not_found -> not_found
 	end.
@@ -55,20 +57,93 @@ login_check(JsonBin) ->
 
 new_loop(Socket) ->
 	receive
-	%% ----  获取socket通道数据
+		%% ----  获取socket通道数据
 		{tcp,Socket,<<ProtoId:16, JsonBin/binary>>} ->
+			DataMap = jsx:decode(JsonBin, [return_maps, {labels, atom}]),
 			case ProtoId of
 				%% 用户发送频道消息
 				?MSG_REQUEST_PROTOCOL_NUMBER ->
-					DataMap = jsx:decode(JsonBin, [return_maps, {labels, atom}]),
 					%% 向频道管理者得到所属频道PID
-					channel_manager:query_channel_pid(maps:get(channel,DataMap))
-			end;
+					channel_manager:query_channel_pid(maps:get(channel,DataMap));
 
-	%% ---- TCP 连接关闭 ----
+				%% 用户创建频道
+				?CHANNEL_CREAT_REQUEST_PROTOCOL_NUMBER ->
+					%% 向频道管理者发送新增频道消息
+					Creator = maps:get(#channel_user_packet.user,DataMap),
+					ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+					{ok,ChannelPid} = channel_manager:register_channel(Creator,ChannelName);
+					%% 返回创建成功消息
+
+				%% 用户删除频道
+				?CHANNEL_DELETE_REQUEST_PROTOCOL_NUMBER ->
+					Deleter = maps:get(#channel_user_packet.user,DataMap),
+					ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+					{ok,_} = channel_manager:revoke_channel(Deleter,ChannelName);
+
+				%% 用户加入频道
+			 	?JOIN_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
+					Joiner = maps:get(#channel_user_packet.user,DataMap),
+					ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+					{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
+					%% 数据库新增频道与用户关系记录
+					database_queryer:add_channel_user_record(ChannelName,Joiner),
+					%% 向频道进程注册自己的信息，其会向其他客户端广播说明自己的加入
+					ChannelPid ! {user_register, Joiner, self()};
+
+				%% 用户退出频道
+				?QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
+					Quitter = maps:get(#channel_user_packet.user,DataMap),
+					ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+					{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
+					%% 数据库新增频道与用户关系记录
+					database_queryer:remove_channel_user_record(ChannelName,Quitter),
+					%% 向频道进程注册自己的信息，其会向其他客户端广播说明自己的加入
+					ChannelPid ! {user_revoke, Quitter}
+			end,
+			inet:setopts(Socket, [{active, once}]),
+			new_loop(Socket);
+
+
+		%% ---- TCP 连接关闭 ----
 		{tcp_closed, Socket} ->
 			io:format("[chat_session] 客户端断开连接~n"),
-			{error, disconnect}
+			{error, disconnect};
+
+		%% 接收到频道广播消息，发送给客户端
+		{msg_broadcast,ChannelName,SenderName,Message} ->
+
+			JsonBinary = jsx:encode(
+				[
+					{#msg_response_packet.sender, SenderName},
+					{#msg_response_packet.channel, ChannelName},
+					{#msg_response_packet.message, Message}
+				]
+			),
+			gen_tcp:send(Socket,JsonBinary),
+			new_loop(Socket);
+
+		%% 接收频道加入新用户消息，发送给客户端
+		{user_join_channel,UserName,ChannelName} ->
+
+			JsonBinary = jsx:encode(
+				[
+
+				]
+			),
+			gen_tcp:send(Socket,JsonBinary),
+			new_loop(Socket);
+
+		%% 接收到用户退出频道消息，发送给客户端
+		{user_quit_channel,UserName,ChannelName} ->
+			new_loop(Socket);
+
+		%% 接受到新频道创建消息，发送给客户端
+		{create_channel,Creator,CreatedChannelName} ->
+			new_loop(Socket);
+
+		%% 接受到频道删除消息，发送给客户端
+		{delete_channel,Deleter,DeletedChannelName} ->
+			new_loop(Socket)
 	end.
 
 

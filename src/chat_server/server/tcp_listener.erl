@@ -54,17 +54,14 @@ handle_info(accept, ListenSocket) ->
 handle_info(_Msg, State) ->
 	{noreply, State}.
 
+
 handle_call(_Req, _From, State) ->
 	{reply, ok, State}.
 
-%% 往channel广播信息
-handle_cast({msg,UserId,ChannelId},State) ->
-	{noreply, State};
+
 handle_cast(stop, State) ->
 	io:format("[chat_tcp_server] stopped.~n"),
 	{stop, normal, State};
-
-
 
 handle_cast(_, State) ->
 	{noreply, State}.
