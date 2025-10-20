@@ -64,7 +64,9 @@ handle_call({query_pid,ChannelName}, _From, State) ->
 
 
 handle_call({query_pid_batch,ChannelNameList}, _From, State) ->
-	ChannelPidList = ets:match(State, {ChannelNameList,'$1'}),
+	ChannelPidList = [
+		Pid || Name <- ChannelNameList, [{_, Pid}] <- [ets:lookup(State, Name)]  %% 只匹配查到的
+	],
 	{reply, {ok, ChannelPidList}, State};
 
 %% 创建频道回调方法

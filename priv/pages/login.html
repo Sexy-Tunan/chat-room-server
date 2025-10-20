@@ -23,7 +23,7 @@
             }
 
             <!-- 发起websocket连接, 传输登录数据包 -->
-            const socket = new WebSocket("ws://172.22.2.101:10086/websocket");
+            const socket = new WebSocket("ws://192.168.126.1:10086/websocket");
             socket.addEventListener("message", function (event) {
                 console.log("Message from server ", event.data);
                 <!-- 跳转到聊天页面 -->

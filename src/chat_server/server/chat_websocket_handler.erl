@@ -35,7 +35,7 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 		%% 处理登录请求
 		?LOGIN_REQUEST_PROTOCOL_NUMBER ->
 			UserName = maps:get(userName, DataMap),
-			{PayLoadDataBin,NewState} = case login_check(JsonBin) of
+			{PayloadJsonBin,NewState} = case login_check(JsonBin) of
 			    true ->
 					io:format("用户登录成功~n"),
 					TempState = State#{login_state => true, user => UserName},
@@ -53,11 +53,13 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			 		PayloadJsonBin = jsx:encode(#{state => false, user => UserName, data => "密码错误"}),
 					{PayloadJsonBin,State}
 			end,
-			PacketLength = 2 + length(PayLoadDataBin),
+			io:format("PayloadJsonBin type = ~p~n", [erlang:is_binary(PayloadJsonBin)]),
+			io:format("PayloadJsonBin value = ~p~n", [PayloadJsonBin]),
+			PacketLength = 2 + byte_size(PayloadJsonBin),
 			Packet = <<
 				PacketLength:32/big-unsigned-integer,
 				?Login_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer,
-				PayLoadDataBin
+				PayloadJsonBin
 			>>,
 			%% 构造数据包返回
 			{reply, {binary,Packet},NewState};

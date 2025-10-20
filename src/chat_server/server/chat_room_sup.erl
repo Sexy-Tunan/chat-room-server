@@ -25,7 +25,7 @@ init([]) ->
 			[
 				{
 					tag1,
-					{database_queryer, start, [false]},
+					{database_queryer, start, [true]},
 					permanent,
 					10000,
 					worker,

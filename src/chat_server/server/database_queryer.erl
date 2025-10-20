@@ -89,7 +89,7 @@ init([IsNeedInitData]) ->
 		{user,    "data/user.dets",    user_ets,    #user.name},
 		{msg,     "data/msg.dets",     msg_ets,     #msg.user_name},
 		{channel, "data/channel.dets", channel_ets, #channel.name},
-		{channel_user, "data/channel.dets", channel_user_ets, #channel_user.channel_name}
+		{channel_user, "data/channel_user.dets", channel_user_ets, #channel_user.channel_name}
 	],
 	Tables = load_all_dets_to_ets(TablesInfo),
 	case IsNeedInitData of
