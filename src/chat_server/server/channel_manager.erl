@@ -29,15 +29,15 @@ stop() ->
 init([]) ->
 
 	%% 预设此管理进程会挂，那么监控树会拉起，但是并非每次启动都需要去启动频道进程，只有第一次需要
-	case ets:whereis(#channel_pid) of
+	case ets:whereis(channel_pid_ets) of
 		ChannelEts -> {ok, ChannelEts};
 		undefined ->
 			%% 查询数据库，得到所有的未删除的频道，创建对应的所有频道进程
 			ChannelNameList = database_queryer:query_all_channel_name_alive(),
 			%% 循环创建频道进程，并将对应关系插入
-			ChannelEts = ets:new(#channel_pid, [bag, named_table, private, {keypos, #channel_pid.channel_name}]),
+			ChannelEts = ets:new(channel_pid_ets, [bag, named_table, private, {keypos, 1}]),
 			lists:foreach(fun(ChannelName) ->
-				ets:insert(ChannelEts, #channel_pid = {channel_name = ChannelName, pid = channel:start(ChannelName)}) end
+				ets:insert(ChannelEts, #channel_pid{channel_name = ChannelName, pid = channel:start(ChannelName)}) end
 				, ChannelNameList
 			),
 			{ok, ChannelEts}
@@ -65,7 +65,7 @@ handle_call({query_pid,ChannelName}, _From, State) ->
 handle_call({register,Creator, ChannelName}, _From, State) ->
 	%% 创建频道进程并将关系写入ets内存
 	NewChannelPid = channel:start(ChannelName),
-	ets:insert(State, #channel_pid = {channel_name = ChannelName, pid = NewChannelPid}),
+	ets:insert(State, #channel_pid{channel_name = ChannelName, pid = NewChannelPid}),
 	%% 数据库表新增记录
 	database_queryer:add_channel_record(Creator,ChannelName),
 	%% 通过世界频道进程将新频道信息广播给所有用户进程并通知客户端
@@ -77,7 +77,7 @@ handle_call({register,Creator, ChannelName}, _From, State) ->
 handle_call({revoke,Deleter, ChannelName}, _From, State) ->
 	%% 创建频道进程并将关系写入ets内存
 	NewChannelPid = channel:start(ChannelName),
-	ets:insert(State, #channel_pid = {channel_name = ChannelName, pid = NewChannelPid}),
+	ets:insert(State, #channel_pid{channel_name = ChannelName, pid = NewChannelPid}),
 	%% 通过世界频道进程将删除的频道信息广播给所有用户进程并通知客户端
 	{_,_,WorldPid} = ets:lookup(State,?WORLD_CHANNEL_NAME),
 	WorldPid ! {delete_channel, Deleter, ChannelName},

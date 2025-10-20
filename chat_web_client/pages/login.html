@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>login pages</title>
+    <link rel="stylesheet" type="text/css" href="css/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>欢迎来到聊天室</h2>
+        <input id="userName" type="text" placeholder="请输入你的用户名"/><br>
+        <input id="password" type="text" placeholder="请输入你的密码"/><br>
+        <button onclick="enterChat()">进入聊天室</button>
+    </div>
+
+    <script>
+        function enterChat() {
+            const userName = document.getElementById('userName').value.trim();
+            const password = document.getElementById('password').value.trim();
+            if (!userName) {
+                alert('请输入昵称');
+                return;
+            }
+
+            <!-- 发起websocket连接, 传输登录数据包 -->
+            const socket = new WebSocket("ws://172.22.2.101:10086/ws");
+            socket.addEventListener("message", function (event) {
+                console.log("Message from server ", event.data);
+                <!-- 跳转到聊天页面 -->
+            window.location.href = './chat.html';
+            });
+            <!-- 连接之后马上发送登录数据包 -->
+            socket.onopen = (event) => {
+                console.log("已连接到聊天服务器,正在进行登录信息校验");
+
+                jsonObj = {'userName':userName,'password':password};
+                const jsonStr = JSON.stringify(jsonObj);
+                const encoder = new TextEncoder();
+                const jsonBytes = encoder.encode(jsonStr);
+
+                // 计算总长度 = (协议号) + JSON长度
+                const totalLength = 2 + jsonBytes.length;
+
+                // 构造完整包：4字节包长 + 2字节协议号 + JSON数据
+                const buffer = new ArrayBuffer(4 + totalLength);
+                const view = new DataView(buffer);
+                let offset = 0;
+
+                // 写入包长（4字节，大端序）
+                view.setUint32(offset, totalLength, false); // false = big-endian
+                offset += 4;
+
+                // 写入协议号（2字节，大端序）
+                view.setUint16(offset, protocolId, false);
+                offset += 2;
+
+                // 写入 JSON 字节
+                const bytes = new Uint8Array(buffer);
+                bytes.set(jsonBytes, offset);
+                alert(buffer);
+                socket.send(buffer);
+            };
+
+            <!-- 本地存储昵称 -->
+            localStorage.setItem('userName', userName);
+            localStorage.setItem('password', password);
+<!--            alert(localStorage.getItem('userName'));-->
+<!--            alert(localStorage.getItem('password'));-->
+
+
+
+        }
+
+        function onLoginMessage(event) {
+            event.data
+        }
+
+        // 构造函数：包长(4字节) + 协议号(2字节) + JSON
+        function buildPacket(protocolId, jsonObj) {
+            const jsonStr = JSON.stringify(jsonObj);
+            const jsonBytes = Buffer.from(jsonStr, 'utf8');
+
+            const totalLength = 2 + jsonBytes.length; // 不含4字节包头
+            const buf = Buffer.alloc(4 + totalLength);
+
+            // 写入包长（4字节大端）
+            buf.writeUInt32BE(totalLength, 0);
+            // 写入协议号（2字节大端）
+            buf.writeUInt16BE(protocolId, 4);
+            // 写入JSON内容
+            jsonBytes.copy(buf, 6);
+
+            return buf;
+        }
+
+    </script>
+</body>
+</html>

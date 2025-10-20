@@ -150,7 +150,7 @@ handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 	case maps:get(TableName, Tables, undefined) of
 		undefined -> {reply, {error, no_table}, State};
 		#{ets := Ets} ->
-			case ets:match(Ets, {_,ChannelName,'$1'}) of
+			case ets:match(Ets, {'_',ChannelName,'$1'}) of
 				UserNameList -> {reply, {ok, UserNameList}, State};
 				[] -> {reply, {error,not_found}, State}
 			end
@@ -162,7 +162,7 @@ handle_call({query_channel, alive, TableName},_From, State) ->
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
-			ChannelNameList = ets:match(Ets, {'$1', _, true}),
+			ChannelNameList = ets:match(Ets, {'$1', '_', true}),
 			{reply, {ok, ChannelNameList}, State}
 	end;
 

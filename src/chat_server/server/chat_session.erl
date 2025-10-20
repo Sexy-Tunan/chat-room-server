@@ -14,7 +14,7 @@ start(Socket) ->
 	process_flag(trap_exit, true),
 	receive
 		start ->
-			io:format("[chat_session, ~p] 获取新建socket通道控制权~n", [self()]),
+			io:format("[chat_session, ~p] 获取了新建socket通道控制权~n", [self()]),
 			io:format("[chat_session, ~p] 正在等待登录消息包~n", [self()]),
 			try_login(Socket),
 			inet:setopts(Socket, [{active, once}]),
@@ -26,12 +26,19 @@ try_login(Socket) ->
 	receive
 		%% ----  获取socket通道数据
 		{tcp,Socket,<<ProtoId:16, JsonBin/binary>>} ->
+			io:format("接受到数据包~n"),
 			case jsx:is_json(JsonBin) of
 				true ->
 					case ProtoId of
 						?LOGIN_REQUEST_PROTOCOL_NUMBER ->
 							case login_check(JsonBin) of
-								true -> io:format("用户登录成功~n"), put(login_state,true), true;
+								true ->
+									io:format("用户登录成功~n"),
+									put(login_state,true),
+									%% 构造返回内容，测试阶段
+									ResponseJsonBin = jsx:encode(#{#login_response_packet.state => true, #login_response_packet.data => "登录成功啦"}),
+									gen_tcp:send(socket, ResponseJsonBin),
+									true;
 								false -> io:format("用户登录失败(不存在或者密码错误)~n"), put(login_state,false), wrong_password;
 								not_found -> io:format("用户不存在~n"), not_found
 							end;

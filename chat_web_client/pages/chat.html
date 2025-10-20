@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+    <h2 id="welcome"></h2>
+    <div id="messages"></div>
+    <input id="msgInput" placeholder="输入消息..."/>
+    <button onclick="sendMessage()">发送</button>
+
+    <script>
+        const nickname = localStorage.getItem('nickname');
+        document.getElementById('welcome').textContent = `欢迎, ${nickname}`;
+
+        const socket = new WebSocket("ws://localhost:8080/ws"); // 替换为你的Erlang服务端地址
+
+        socket.onopen = () => {
+          console.log("已连接到服务器");
+          socket.send(JSON.stringify({ type: "join", user: nickname }));
+        };
+
+        socket.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          const messagesDiv = document.getElementById('messages');
+          const msgEl = document.createElement('div');
+          msgEl.textContent = `[${data.user}] ${data.msg}`;
+          messagesDiv.appendChild(msgEl);
+        };
+
+        function sendMessage() {
+          const input = document.getElementById('msgInput');
+          const msg = input.value.trim();
+          if (msg) {
+            socket.send(JSON.stringify({ type: "chat", user: nickname, msg }));
+            input.value = '';
+          }
+        }
+    </script>
+</body>
+</html>

@@ -38,13 +38,14 @@
 %% ===========================================================
 %% 响应包格式
 -record(login_response_packet,{
-	user,
 	state,
+	user,
 	%% {data ==>
 	%% 		{channels ==>
 	%% 				{channel1 ==> [usr1,user2,user3], channel2 ==> [user1,user2,user3] ......}
 	%% 		}
 	%% }
+	%% state为false时，data包装错误原因； state为true时，data包装已加入的频道以及频道所拥有的用户信息返回
 	data
 }).
 %% 聊天消息广播返回响应包格式
@@ -53,6 +54,6 @@
 	channel,
 	message
 }).
-%%
+%% 用户加入频道响应返回包
 
 
