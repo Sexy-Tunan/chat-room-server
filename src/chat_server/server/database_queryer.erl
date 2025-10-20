@@ -29,7 +29,7 @@
 -type user_name() :: string().
 -type user_message() :: {ok,#user{}} | {error, no_table} | user_not_found.
 
-
+-define(WORLD_CHANNEL,"world").
 -record(state, {
 	tables % #{TableName => #{ets => Ets, dets => Dets}},其实就是一个map映射存储表信息
 }).
@@ -128,7 +128,8 @@ init_data(Tables) ->
 		undefined -> nothing;
 		#{ets := Ets2} ->
 			ets:insert(Ets2,#channel{name="bruce的频道",creator = "Bruce", alive = true}),
-			ets:insert(Ets2,#channel{name="Ben的频道",creator = "Ben", alive = true})
+			ets:insert(Ets2,#channel{name="Ben的频道",creator = "Ben", alive = true}),
+			ets:insert(Ets2,#channel{name="world",creator = "Ben", alive = true})
 	end,
 
 	case maps:get(msg,Tables,undefined) of
@@ -164,16 +165,22 @@ handle_call({add_user, TableName, UserName, Password}, _From, State) ->
 			{reply, ok, State}
 	end;
 
-%% 根据频道名字查询用户信息
+%% 根据频道名字查询关联的用户信息
 handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName, Tables, undefined) of
 		undefined -> {reply, {error, no_table}, State};
 		#{ets := Ets} ->
-			case ets:match(Ets, {'_',ChannelName,'$1'}) of
-				UserNameList -> {reply, {ok, UserNameList}, State};
-				[] -> {reply, {error,not_found}, State}
+			case string:equal(ChannelName, ?WORLD_CHANNEL) of
+				%% 世界频道特殊处理
+				true -> {reply, {ok, ets:match(Ets, {'_','_','$1'})}, State};
+				false ->
+					case ets:match(Ets, {'_',ChannelName,'$1'}) of
+						 UserNameList -> {reply, {ok, UserNameList}, State};
+						 [] -> {reply, {error,not_found}, State}
+					end
 			end
+
 	end;
 
 %% 查询所有存活的频道名字

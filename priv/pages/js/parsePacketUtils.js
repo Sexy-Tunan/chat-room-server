@@ -1,23 +1,4 @@
-// WebSocket 数据包工具类
-// 数据格式：4字节包长(大端序) + 2字节协议号(大端序) + JSON数据
-
-// 协议号定义
-const PROTOCOL = {
-    // 服务器 -> 客户端
-    LOGIN_RESPONSE: 20001,
-    MSG_RESPONSE: 21001,
-    CREATE_CHANNEL_RESPONSE: 22001,
-    DELETE_CHANNEL_RESPONSE: 22002,
-    JOIN_CHANNEL_RESPONSE: 23001,
-    QUIT_CHANNEL_RESPONSE: 23002,
-};
-
-
-/**
- * 解析数据包
- * @param {ArrayBuffer} buffer - 接收到的数据包
- * @returns {object} - 包含协议号和数据的对象 {protocolId, data}
- */
+// 解析数据包
 function parsePacket(buffer) {
     const view = new DataView(buffer);
     
@@ -44,9 +25,8 @@ function parsePacket(buffer) {
     }
     
     return {
-        packetLength,
-        protocolId,
-        data
+        packetLength: packetLength,
+        protocolId: protocolId,
+        data: data
     };
 }
-
