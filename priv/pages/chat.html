@@ -1,42 +1,114 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天室</title>
+    <link rel="stylesheet" href="css/chat.css">
 </head>
 <body>
-    <h2 id="welcome"></h2>
-    <div id="messages"></div>
-    <input id="msgInput" placeholder="输入消息..."/>
-    <button onclick="sendMessage()">发送</button>
+    <!-- 登录验证遮罩层 -->
+    <div id="loginOverlay" class="overlay">
+        <div class="overlay-content">
+            <div class="spinner"></div>
+            <h2>正在验证登录信息...</h2>
+            <p>请稍候</p>
+        </div>
+    </div>
 
-    <script>
-        const nickname = localStorage.getItem('nickname');
-        document.getElementById('welcome').textContent = `欢迎, ${nickname}`;
+    <!-- 主聊天界面 -->
+    <div id="chatContainer" class="chat-container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>聊天室</h2>
+                <div class="user-info">
+                    <span class="user-badge">👤</span>
+                    <span id="currentUser" class="user-name">用户</span>
+                </div>
+            </div>
 
-        const socket = new WebSocket("ws://localhost:8080/ws"); // 替换为你的Erlang服务端地址
+            <!-- 频道列表 -->
+            <div class="channels-section">
+                <div class="section-header">
+                    <h3>📢 频道</h3>
+                    <button id="createChannelBtn" class="icon-btn" title="创建频道">+</button>
+                </div>
+                <div id="channelList" class="channel-list">
+                    <!-- 频道列表将通过JavaScript动态生成 -->
+                </div>
+            </div>
+        </div>
 
-        socket.onopen = () => {
-          console.log("已连接到服务器");
-          socket.send(JSON.stringify({ type: "join", user: nickname }));
-        };
+        <!-- 主聊天区域 -->
+        <div class="main-area">
+            <!-- 聊天头部 -->
+            <div class="chat-header">
+                <div class="channel-info">
+                    <h2 id="currentChannel">请选择一个频道</h2>
+                    <span id="memberCount" class="member-count"></span>
+                </div>
+                <div class="header-actions">
+                    <button id="leaveChannelBtn" class="icon-btn" title="退出频道">退出</button>
+                </div>
+            </div>
 
-        socket.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          const messagesDiv = document.getElementById('messages');
-          const msgEl = document.createElement('div');
-          msgEl.textContent = `[${data.user}] ${data.msg}`;
-          messagesDiv.appendChild(msgEl);
-        };
+            <!-- 消息列表 -->
+            <div id="messageList" class="message-list">
+                <div class="welcome-message">
+                    <h3>欢迎来到聊天室！</h3>
+                    <p>选择一个频道开始聊天吧</p>
+                </div>
+            </div>
 
-        function sendMessage() {
-          const input = document.getElementById('msgInput');
-          const msg = input.value.trim();
-          if (msg) {
-            socket.send(JSON.stringify({ type: "chat", user: nickname, msg }));
-            input.value = '';
-          }
-        }
-    </script>
+            <!-- 消息输入区 -->
+            <div class="message-input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="输入消息..." 
+                    disabled
+                />
+                <button id="sendBtn" class="send-btn" disabled>发送</button>
+            </div>
+        </div>
+
+        <!-- 成员列表 -->
+        <div class="members-panel">
+            <div class="members-header">
+                <h3>成员列表</h3>
+            </div>
+            <div id="memberList" class="member-list">
+                <!-- 成员列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建频道对话框 -->
+    <div id="createChannelModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>创建新频道</h3>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input 
+                    type="text" 
+                    id="newChannelName" 
+                    class="modal-input" 
+                    placeholder="请输入频道名称"
+                    maxlength="30"
+                />
+            </div>
+            <div class="modal-footer">
+                <button id="confirmCreateBtn" class="btn btn-primary">创建</button>
+                <button id="cancelCreateBtn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/parsePacketUtils.js"></script>
+    <script src="js/chat.js"></script>
 </body>
 </html>

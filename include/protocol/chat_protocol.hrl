@@ -14,6 +14,11 @@
 %% SERVER --> CLIENT
 -define(Login_RESPONSE_PROTOCOL_NUMBER, 20001).
 -define(MSG_RESPONSE_PROTOCOL_NUMBER, 21001).
+-define(CREATE_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 22001).
+-define(DELETE_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 22002).
+-define(JOIN_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 23001).
+-define(QUIT_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 23002).
+
 
 
 %% ============================================================
@@ -55,5 +60,8 @@
 	message
 }).
 %% 用户加入频道响应返回包
-
+-record(channel_response_packet,{
+	user,
+	channel
+}).
 

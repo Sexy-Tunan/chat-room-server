@@ -59,13 +59,15 @@ revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter
 %% 回调方法
 %% 查询pid
 handle_call({query_pid,ChannelName}, _From, State) ->
-	{_, ChannelPid} = ets:lookup(State,ChannelName),
-	{reply, {ok, ChannelPid}, State};
+	case ets:lookup(State,ChannelName) of
+		[#channel_pid{pid = ChannelPid}] -> {reply, {ok, ChannelPid}, State};
+		[] -> {reply, {error, not_found}, State}
+	end;
 
-
+%% 批量查询pid
 handle_call({query_pid_batch,ChannelNameList}, _From, State) ->
 	ChannelPidList = [
-		Pid || Name <- ChannelNameList, [{_, Pid}] <- [ets:lookup(State, Name)]  %% 只匹配查到的
+		Pid || Name <- ChannelNameList, [#channel_pid{pid = Pid}] <- [ets:lookup(State, Name)]  %% 只匹配查到的
 	],
 	{reply, {ok, ChannelPidList}, State};
 
@@ -77,18 +79,28 @@ handle_call({register,Creator, ChannelName}, _From, State) ->
 	%% 数据库表新增记录
 	database_queryer:add_channel_record(Creator,ChannelName),
 	%% 通过世界频道进程将新频道信息广播给所有用户进程并通知客户端
-	{_,_,WorldPid} = ets:lookup(State,?WORLD_CHANNEL_NAME),
-	WorldPid ! {create_channel, Creator, ChannelName},
+	case ets:lookup(State,?WORLD_CHANNEL_NAME) of
+		[#channel_pid{pid = WorldPid}] -> WorldPid ! {create_channel, Creator, ChannelName};
+		[] -> io:format("警告：世界频道不存在~n")
+	end,
 	{reply, {ok, NewChannelPid}, State};
 
 %% 管理删除频道的回调方法
 handle_call({revoke,Deleter, ChannelName}, _From, State) ->
-	%% 创建频道进程并将关系写入ets内存
-	NewChannelPid = channel:start(ChannelName),
-	ets:insert(State, #channel_pid{channel_name = ChannelName, pid = NewChannelPid}),
+	%% 删除频道进程，停止频道
+	case ets:lookup(State, ChannelName) of
+		[#channel_pid{pid = ChannelPid}] -> 
+			ChannelPid ! stop,
+			ets:delete(State, ChannelName);
+		[] -> io:format("警告：频道不存在~n")
+	end,
+	%% 数据库删除频道记录
+	database_queryer:remove_channel_record(Deleter, ChannelName),
 	%% 通过世界频道进程将删除的频道信息广播给所有用户进程并通知客户端
-	{_,_,WorldPid} = ets:lookup(State,?WORLD_CHANNEL_NAME),
-	WorldPid ! {delete_channel, Deleter, ChannelName},
+	case ets:lookup(State,?WORLD_CHANNEL_NAME) of
+		[#channel_pid{pid = WorldPid}] -> WorldPid ! {delete_channel, Deleter, ChannelName};
+		[] -> io:format("警告：世界频道不存在~n")
+	end,
 	{reply, ok, State};
 
 

@@ -59,7 +59,7 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			Packet = <<
 				PacketLength:32/big-unsigned-integer,
 				?Login_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer,
-				PayloadJsonBin
+				PayloadJsonBin/binary
 			>>,
 			%% 构造数据包返回
 			{reply, {binary,Packet},NewState};
@@ -72,22 +72,22 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 		%% 用户创建频道
 		?CHANNEL_CREAT_REQUEST_PROTOCOL_NUMBER ->
 			%% 向频道管理者发送新增频道消息
-			Creator = maps:get(#channel_user_packet.user,DataMap),
-			ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+			Creator = maps:get(user,DataMap),
+			ChannelName = maps:get(channel,DataMap),
 			{ok,ChannelPid} = channel_manager:register_channel(Creator,ChannelName),
 			{ok, State};
 
 		%% 用户删除频道
 		?CHANNEL_DELETE_REQUEST_PROTOCOL_NUMBER ->
-			Deleter = maps:get(#channel_user_packet.user,DataMap),
-			ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+			Deleter = maps:get(user,DataMap),
+			ChannelName = maps:get(channel,DataMap),
 			{ok,_} = channel_manager:revoke_channel(Deleter,ChannelName),
 			{ok, State};
 
 		%% 用户加入频道
 		?JOIN_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
-			Joiner = maps:get(#channel_user_packet.user,DataMap),
-			ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+			Joiner = maps:get(user,DataMap),
+			ChannelName = maps:get(channel,DataMap),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
 			%% 数据库新增频道与用户关系记录
 			database_queryer:add_channel_user_record(ChannelName,Joiner),
@@ -97,8 +97,8 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 
 		%% 用户退出频道
 		?QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
-			Quitter = maps:get(#channel_user_packet.user,DataMap),
-			ChannelName = maps:get(#channel_user_packet.channel,DataMap),
+			Quitter = maps:get(user,DataMap),
+			ChannelName = maps:get(channel,DataMap),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
 			%% 数据库新增频道与用户关系记录
 			database_queryer:remove_channel_user_record(ChannelName,Quitter),
@@ -110,25 +110,40 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 websocket_handle(_Data, State) ->
 	{ok, State}.
 
+%% 接受频道广播消息 告知客户端聊天消息
+websocket_info({msg_broadcast, ChannelName, SenderName, Message}, State) ->
+	PayloadJsonBin = jsx:encode(#{channel => ChannelName, sender => SenderName, message => Message}),
+	PacketLength = 2 + byte_size(PayloadJsonBin),
+	Packet = <<PacketLength:32/big-unsigned-integer, ?MSG_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	{reply, {binary, Packet}, State};
+
 %% 接受频道广播消息 告知客户端用户加入频道信息
-websocket_info({create_channel, _Ref, Msg}, State) ->
-	erlang:start_timer(1000, self(), <<"How' you doin'?">>),
-	{reply,[{text, Msg}], State};
+websocket_info({user_join_channel, UserName, ChannelName}, State) ->
+	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
+	PacketLength = 2 + byte_size(PayloadJsonBin),
+	Packet = <<PacketLength:32/big-unsigned-integer, ?JOIN_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端用户退出频道信息
-websocket_info({create_channel, _Ref, Msg}, State) ->
-	erlang:start_timer(1000, self(), <<"How' you doin'?">>),
-	{reply,[{text, Msg}], State};
+websocket_info({user_quit_channel, UserName, ChannelName}, State) ->
+	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
+	PacketLength = 2 + byte_size(PayloadJsonBin),
+	Packet = <<PacketLength:32/big-unsigned-integer, ?QUIT_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端新建频道信息
-websocket_info({create_channel, _Ref, Msg}, State) ->
-	erlang:start_timer(1000, self(), <<"How' you doin'?">>),
-	{reply,[{text, Msg}], State};
+websocket_info({create_channel, Creator, CreatedChannelName}, State) ->
+	PayloadJsonBin = jsx:encode(#{user => Creator, channel => CreatedChannelName}),
+	PacketLength = 2 + byte_size(PayloadJsonBin),
+	Packet = <<PacketLength:32/big-unsigned-integer, ?CREATE_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端删除频道信息
-websocket_info({create_channel, _Ref, Msg}, State) ->
-	erlang:start_timer(1000, self(), <<"How' you doin'?">>),
-	{reply,[{text, Msg}], State};
+websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
+	PayloadJsonBin = jsx:encode(#{user => Deleter, channel => DeletedChannelName}),
+	PacketLength = 2 + byte_size(PayloadJsonBin),
+	Packet = <<PacketLength:32/big-unsigned-integer, ?DELETE_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	{reply, {binary, Packet}, State};
 
 websocket_info(_Info, State) ->
 	{ok, State}.

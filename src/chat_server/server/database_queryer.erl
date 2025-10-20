@@ -150,7 +150,7 @@ handle_call({query_user, TableName, user_name, UserName}, _From, State) ->
 		#{ets := Ets} ->
 			case ets:lookup(Ets, UserName) of
 				[Record] -> {reply, {ok, Record}, State};
-				[] -> {reply, {error,not_found}, State}
+				[] -> {reply, not_found, State}
 			end
 	end;
 
@@ -195,7 +195,7 @@ handle_call({add_channel, TableName, Creator, ChannelName},_From, State) ->
 		#{ets := Ets} ->
 			%% 查询是否存在相同名字的频道
 			case ets:lookup(Ets, ChannelName) of
-				ExistsRecord -> {reply, {error, exits}};
+				[_ExistsRecord|_] -> {reply, {error, exists}, State};
 				[] ->
 					ets:insert(Ets, #channel{name = ChannelName, creator = Creator, alive = true}),
 					{reply, ok, State}
@@ -209,15 +209,18 @@ handle_call({remove_channel, TableName, Owner, ChannelName},_From, State) ->
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
 			%% 判断是否是频道创建者要删除频道
-			{_,Creator,_,_} = ets:lookup(Ets, ChannelName),
-			case string:equal(Creator,Owner) of
-				true -> ets:delete(Ets,ChannelName),{reply, ok, State};
-				false -> {reply, {error, not_creator}, State}
+			case ets:lookup(Ets, ChannelName) of
+				[#channel{creator = Creator}] ->
+					case string:equal(Creator,Owner) of
+						true -> ets:delete(Ets,ChannelName),{reply, ok, State};
+						false -> {reply, {error, not_creator}, State}
+					end;
+				[] -> {reply, {error, not_found}, State}
 			end
 	end;
 
 %% 新增频道用户信息记录
-handle_call({remove_channel_user, TableName, Member, ChannelName},_From, State) ->
+handle_call({add_channel_user, TableName, Member, ChannelName},_From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
@@ -232,7 +235,7 @@ handle_call({remove_channel_user, TableName, Member, ChannelName},_From, State) 
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
-			ets:match_delete(Ets, {ChannelName,Member}),
+			ets:match_delete(Ets, #channel_user{channel_name = ChannelName, user_name = Member}),
 			{reply, ok, State}
 	end;
 
