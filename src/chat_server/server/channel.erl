@@ -40,7 +40,7 @@ handle_info(stop, State) -> {stop, normal, State};
 handle_info({msg,SenderName,Message},State) ->
 	%% 聊天消息广播
 	ChannelName = get(channelName),
-	PidList = ets:match(State, {'_','$1'}),
+	[PidList] = ets:match(State, {'_','$1'}),
 	[Pid ! {msg_broadcast,ChannelName,SenderName,Message} || Pid <- PidList],
 	{noreply, State};
 
@@ -50,7 +50,7 @@ handle_info({user_join_register, UserName, From},State) ->
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	%% 广播其他用户有新用户加入频道
 	ChannelName = get(channelName),
-	PidList = ets:match(State, {'_','$1'}),
+	[PidList] = ets:match(State, {'_','$1'}),
 	[Pid ! {user_join_channel,UserName,ChannelName} || Pid <- PidList],
 	{noreply, State};
 
@@ -71,13 +71,13 @@ handle_info({user_revoke, UserName},State) ->
 
 %% 通过世界频道进程向所有用户广播新频道创建信息
 handle_info({create_channel, Creator, CreatedChannelName},State) ->
-	PidList = ets:match(State, {'_','$1'}),
+	[PidList] = ets:match(State, {'_','$1'}),
 	[Pid ! {create_channel,Creator,CreatedChannelName} || Pid <- PidList],
 	{noreply, State};
 
 %% 通过世界频道进程向所有用户广播频道删除信息
 handle_info({delete_channel, Deleter, DeletedChannelName},State) ->
-	PidList = ets:match(State, {'_','$1'}),
+	[PidList] = ets:match(State, {'_','$1'}),
 	[Pid ! {delete_channel,Deleter,DeletedChannelName} || Pid <- PidList],
 	{noreply, State};
 

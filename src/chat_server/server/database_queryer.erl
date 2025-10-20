@@ -129,7 +129,7 @@ init_data(Tables) ->
 		#{ets := Ets2} ->
 			ets:insert(Ets2,#channel{name="bruce的频道",creator = "Bruce", alive = true}),
 			ets:insert(Ets2,#channel{name="Ben的频道",creator = "Ben", alive = true}),
-			ets:insert(Ets2,#channel{name="world",creator = "Ben", alive = true})
+			ets:insert(Ets2,#channel{name="world",creator = "admin", alive = true})
 	end,
 
 	case maps:get(msg,Tables,undefined) of
@@ -176,7 +176,7 @@ handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 				true -> {reply, {ok, ets:match(Ets, {'_','_','$1'})}, State};
 				false ->
 					case ets:match(Ets, {'_',ChannelName,'$1'}) of
-						 UserNameList -> {reply, {ok, UserNameList}, State};
+						 [UserNameList] -> {reply, {ok, UserNameList}, State};
 						 [] -> {reply, {error,not_found}, State}
 					end
 			end
@@ -189,7 +189,7 @@ handle_call({query_channel, alive, TableName},_From, State) ->
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
-			ChannelNameList = ets:match(Ets, {'$1', '_', true}),
+			[ChannelNameList] = ets:match(Ets, {'$1', '_', true}),
 			{reply, {ok, ChannelNameList}, State}
 	end;
 
@@ -253,10 +253,10 @@ handle_call({query_joined_channel_info_with_members, TableName, User}, _From, St
 		#{ets := Ets} ->
 			%% tableName 为 channel_user
 			%% 先查询用户加入了哪些频道
-			JoinedChannelList = ets:match(Ets, {'$1',User}),
+			[JoinedChannelList] = ets:match(Ets, {'$1',User}),
 			ChannelInfoList = lists:map(
 				fun(ChannelName) ->
-					Members = ets:match(Ets, {ChannelName,'$1'}),
+					[Members] = ets:match(Ets, {ChannelName,'$1'}),
 					#{channel_name => ChannelName, members => Members} end
 				, JoinedChannelList),
 			{reply, {ok, ChannelInfoList}, State}
@@ -268,7 +268,7 @@ handle_call({query_joined_channel_info, TableName, User}, _From, State) ->
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
 			%% 查询用户加入了哪些频道
-			JoinedChannelList = ets:match(Ets, {'$1',User}),
+			[JoinedChannelList] = ets:match(Ets, {'$1',User}),
 			{reply, {ok, JoinedChannelList}, State}
 	end;
 

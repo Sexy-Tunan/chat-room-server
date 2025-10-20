@@ -31,7 +31,7 @@ init([]) ->
 	case ets:whereis(channel_pid_ets) of
 		undefined ->
 			%% 查询数据库，得到所有的未删除的频道，创建对应的所有频道进程
-			ChannelNameList = database_queryer:query_all_channel_name_alive(),
+			{ok, ChannelNameList} = database_queryer:query_all_channel_name_alive(),
 			%% 循环创建频道进程，并将对应关系插入
 			ChannelEts = ets:new(channel_pid_ets, [bag, named_table, private, {keypos, 1}]),
 			lists:foreach(fun(ChannelName) ->
