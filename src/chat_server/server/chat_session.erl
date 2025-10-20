@@ -5,8 +5,8 @@
 -module(chat_session).
 -export([start/1]).
 
--include("../include/protocol/chat_protocol.hrl").
--include("../include/database/chat_database.hrl").
+-include("../../../include/protocol/chat_protocol.hrl").
+-include("../../../include/database/chat_database.hrl").
 
 -define(WORLD_CHANNEL_NAME, "world").
 
@@ -119,25 +119,11 @@ new_loop(Socket) ->
 		%% 接收到频道广播消息，发送给客户端
 		{msg_broadcast,ChannelName,SenderName,Message} ->
 
-			JsonBinary = jsx:encode(
-				[
-					{#msg_response_packet.sender, SenderName},
-					{#msg_response_packet.channel, ChannelName},
-					{#msg_response_packet.message, Message}
-				]
-			),
-			gen_tcp:send(Socket,JsonBinary),
 			new_loop(Socket);
 
 		%% 接收频道加入新用户消息，发送给客户端
 		{user_join_channel,UserName,ChannelName} ->
 
-			JsonBinary = jsx:encode(
-				[
-
-				]
-			),
-			gen_tcp:send(Socket,JsonBinary),
 			new_loop(Socket);
 
 		%% 接收到用户退出频道消息，发送给客户端

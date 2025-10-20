@@ -10,16 +10,19 @@
 -author("Administrator").
 -behaviour(gen_server).
 
--include("../include/database/chat_database.hrl").
+-include("../../../include/database/chat_database.hrl").
 
 
 %% API
 -export([start/1,stop/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
-%% 用户查询api
--export([query_user_message_by_user_name/1,query_user_message_by_channel_name/1,add_channel_record/2,remove_channel_record/2,add_channel_user_record/2, remove_channel_user_record/2]).
-%% 频道查询api
--export([query_all_channel_name_alive/0]).
+%% 用户api
+-export([add_user_record/2,query_user_message_by_user_name/1, query_user_message_by_channel_name/1]).
+%% 频道api
+-export([add_channel_record/2,remove_channel_record/2,query_all_channel_name_alive/0]).
+%% 频道用户api
+-export([add_channel_user_record/2, remove_channel_user_record/2, query_joined_channel_info_with_members/1, query_joined_channel_info/1]).
+
 
 
 -spec query_user_message_by_user_name(user_name()) -> user_message().
@@ -43,6 +46,10 @@ stop() ->
 %% @doc 根据用户名查询用户信息
 %% @Return {ok,record} | {error,not_found}
 query_user_message_by_user_name(UserName) -> gen_server:call(?MODULE,{query_user, user, user_name, UserName}).
+
+%% @doc 根据用户名查询用户信息
+%% @Return {ok,record} | {
+add_user_record(UserName,Password) -> gen_server:call(?MODULE,{add_user, user, UserName,Password}).
 
 %% @doc 根据频道名字其所属的用户信息
 %% @Return {ok,UserNameList} | {error,not_found}
@@ -68,7 +75,10 @@ add_channel_user_record(Member, ChannelName) -> gen_server:call(?MODULE,{add_cha
 %% @Return ok
 remove_channel_user_record(Member, ChannelName) -> gen_server:call(?MODULE,{remove_channel_user, channel_user, Member, ChannelName}).
 
+%% @Return {ok, [{channel_name => ChannelName, members => Members},{channel_name => ChannelName, members => Members},......] }
+query_joined_channel_info_with_members(UserName) -> gen_server:call(?MODULE,{query_joined_channel_info_with_members, channel_user, UserName}).
 
+query_joined_channel_info(UserName) -> gen_server:call(?MODULE,{query_joined_channel_info, channel_user, UserName}).
 
 %% ====================================================================
 %% 初始化方法
@@ -144,6 +154,16 @@ handle_call({query_user, TableName, user_name, UserName}, _From, State) ->
 			end
 	end;
 
+%% 添加用户
+handle_call({add_user, TableName, UserName, Password}, _From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName, Tables, undefined) of
+		undefined -> {reply, {error, no_table}, State};
+		#{ets := Ets} ->
+			ets:insert(Ets, #user{name = UserName,password = Password}),
+			{reply, ok, State}
+	end;
+
 %% 根据频道名字查询用户信息
 handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 	#state{tables = Tables} = State,
@@ -177,7 +197,7 @@ handle_call({add_channel, TableName, Creator, ChannelName},_From, State) ->
 			case ets:lookup(Ets, ChannelName) of
 				ExistsRecord -> {reply, {error, exits}};
 				[] ->
-					ets:insert(Ets, #channel{name = ChannelName, creator = Creator, alive = true, create_time = calendar:now_to_local_time(os:timestamp())}),
+					ets:insert(Ets, #channel{name = ChannelName, creator = Creator, alive = true}),
 					{reply, ok, State}
 			end
 	end;
@@ -214,6 +234,32 @@ handle_call({remove_channel_user, TableName, Member, ChannelName},_From, State) 
 		#{ets := Ets} ->
 			ets:match_delete(Ets, {ChannelName,Member}),
 			{reply, ok, State}
+	end;
+
+handle_call({query_joined_channel_info_with_members, TableName, User}, _From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% tableName 为 channel_user
+			%% 先查询用户加入了哪些频道
+			JoinedChannelList = ets:match(Ets, {'$1',User}),
+			ChannelInfoList = lists:map(
+				fun(ChannelName) ->
+					Members = ets:match(Ets, {ChannelName,'$1'}),
+					#{channel_name => ChannelName, members => Members} end
+				, JoinedChannelList),
+			{reply, {ok, ChannelInfoList}, State}
+	end;
+
+handle_call({query_joined_channel_info, TableName, User}, _From, State) ->
+	#state{tables = Tables} = State,
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% 查询用户加入了哪些频道
+			JoinedChannelList = ets:match(Ets, {'$1',User}),
+			{reply, {ok, JoinedChannelList}, State}
 	end;
 
 handle_call(stop, _From, State) ->

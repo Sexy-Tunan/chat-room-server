@@ -2,5 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/_build/default/lib/cowlib" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/_build/default/lib/ranch" vcs="Git" />
   </component>
 </project>

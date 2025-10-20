@@ -13,7 +13,7 @@
 -export([start/1]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
--include("../include/database/chat_database.hrl").
+-include("../../../include/database/chat_database.hrl").
 
 
 start(ChannelName) ->
@@ -45,13 +45,18 @@ handle_info({msg,SenderName,Message},State) ->
 	{noreply, State};
 
 %% 用户向频道注册自己的信息
-handle_info({user_register, UserName, From},State) ->
+handle_info({user_join_register, UserName, From},State) ->
 	%% 用户加入频道，或者用户连接了服务都需要来到频道注册自己的信息，不然无法进行广播
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	%% 广播其他用户有新用户加入频道
 	ChannelName = get(channelName),
 	PidList = ets:match(State, {'_','$1'}),
 	[Pid ! {user_join_channel,UserName,ChannelName} || Pid <- PidList],
+	{noreply, State};
+
+handle_info({user_login_register, UserName, From},State) ->
+	%% 用户加入频道，或者用户连接了服务都需要来到频道注册自己的信息，不然无法进行广播
+	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	{noreply, State};
 
 %% 用户向频道注销自己的信息

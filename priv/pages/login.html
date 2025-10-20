@@ -23,7 +23,7 @@
             }
 
             <!-- 发起websocket连接, 传输登录数据包 -->
-            const socket = new WebSocket("ws://172.22.2.101:10086/ws");
+            const socket = new WebSocket("ws://172.22.2.101:10086/websocket");
             socket.addEventListener("message", function (event) {
                 console.log("Message from server ", event.data);
                 <!-- 跳转到聊天页面 -->
@@ -31,6 +31,7 @@
             });
             <!-- 连接之后马上发送登录数据包 -->
             socket.onopen = (event) => {
+                alert(localStorage.getItem('userName'));
                 console.log("已连接到聊天服务器,正在进行登录信息校验");
 
                 jsonObj = {'userName':userName,'password':password};
@@ -50,6 +51,8 @@
                 view.setUint32(offset, totalLength, false); // false = big-endian
                 offset += 4;
 
+                protocolId = 10001;
+
                 // 写入协议号（2字节，大端序）
                 view.setUint16(offset, protocolId, false);
                 offset += 2;
@@ -60,6 +63,10 @@
                 alert(buffer);
                 socket.send(buffer);
             };
+
+            socket.onerror = function(event){
+                alert(localStorage.getItem('userName'));
+            }
 
             <!-- 本地存储昵称 -->
             localStorage.setItem('userName', userName);

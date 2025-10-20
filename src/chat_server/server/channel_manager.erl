@@ -15,10 +15,10 @@
 %% API
 -export([start/0,stop/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
--export([query_channel_pid/1, register_channel/2, revoke_channel/2]).
+-export([query_channel_pid/1, query_channel_pid_batch/1, register_channel/2, revoke_channel/2]).
 
 
--include("../include/database/chat_database.hrl").
+-include("../../../include/database/chat_database.hrl").
 
 start() ->
 	gen_server:start({local, ?MODULE}, ?MODULE, [], []).
@@ -47,6 +47,7 @@ init([]) ->
 %% ==================================================================================
 %% API
 query_channel_pid(ChannelName) -> gen_server:call(?MODULE, {query_pid, ChannelName}).
+query_channel_pid_batch(ChannelNameList) -> gen_server:call(?MODULE, {query_pid_batch, ChannelNameList}).
 register_channel(Creator,ChannelName) -> gen_server:call(?MODULE, {register, Creator, ChannelName}).
 revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter, ChannelName}).
 
@@ -60,6 +61,11 @@ revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter
 handle_call({query_pid,ChannelName}, _From, State) ->
 	{_, ChannelPid} = ets:lookup(State,ChannelName),
 	{reply, {ok, ChannelPid}, State};
+
+
+handle_call({query_pid_natch,ChannelNameList}, _From, State) ->
+	ChannelPidList = ets:match(State, {ChannelNameList,'$1'}),
+	{reply, {ok, ChannelPidList}, State};
 
 %% 创建频道回调方法
 handle_call({register,Creator, ChannelName}, _From, State) ->
