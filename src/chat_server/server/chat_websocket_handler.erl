@@ -63,10 +63,15 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			>>,
 			%% 构造数据包返回
 			{reply, {binary,Packet},NewState};
+
 		%% 用户发送频道消息
 		?MSG_REQUEST_PROTOCOL_NUMBER ->
 			%% 向频道管理者得到所属频道PID
-			channel_manager:query_channel_pid(maps:get(channel,DataMap)),
+			Sender = maps:get(sender,DataMap),
+			ChannelName = maps:get(channel,DataMap),
+			Message = maps:get(message,DataMap),
+			{ok, ChannelPid} = channel_manager:query_channel_pid(ChannelName),
+			ChannelPid ! {msg, Sender, Message},
 			{ok, State};
 
 		%% 用户创建频道
