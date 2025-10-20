@@ -63,7 +63,7 @@ handle_call({query_pid,ChannelName}, _From, State) ->
 	{reply, {ok, ChannelPid}, State};
 
 
-handle_call({query_pid_natch,ChannelNameList}, _From, State) ->
+handle_call({query_pid_batch,ChannelNameList}, _From, State) ->
 	ChannelPidList = ets:match(State, {ChannelNameList,'$1'}),
 	{reply, {ok, ChannelPidList}, State};
 
