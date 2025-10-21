@@ -16,7 +16,11 @@
 start(_Type, _Args) ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
-			{"/websocket", chat_websocket_handler, []}
+			{"/websocket", chat_websocket_handler, []},
+			%% 静态文件
+			{"/", cowboy_static, {priv_file, chat_room, "static/pages/login.html"}},
+			{"/chat.html", cowboy_static, {priv_file, chat_room, "static/pages/chat.html"}},
+			{"/[...]", cowboy_static, {priv_dir, chat_room, "static"}}
 		]}
 	]),
 	{ok, _} = cowboy:start_clear(http, [{port, 10086}], #{

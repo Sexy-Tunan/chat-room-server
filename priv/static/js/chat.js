@@ -6,6 +6,12 @@ import {PROTOCOL} from './protocol.js';
 let ws = null;
 const WS_URL = "ws://172.22.2.101:10086/websocket"; // 替换成你的服务端地址
 
+// 本地缓存的所有频道、成员、消息
+const ChatState = {
+    channels: {},    // {channelName: {members: [...], messages: [...]}}
+    currentChannel: null,
+    currentUser: localStorage.getItem("userName"),
+};
 
 // ======== 页面加载时初始化 WebSocket 和 chat页面控件绑定========
 window.addEventListener("DOMContentLoaded", () => {
@@ -179,84 +185,133 @@ function handleLoginResponse(payload) {
     if (payload.state) {
         console.log("登录验证成功:", payload.user);
         showLoginOverlay(false);
+
+        // 保存信息全局对象ChatState
+        payload.data.forEach(ch => {
+            ChatState.channels[ch.channel_name] = {
+                members: ch.members,
+                messages: []
+            };
+        });
         // 可以初始化频道列表
-        initChannels(payload.data);
+        initChannels();
     } else {
         console.error("登录失败:", payload.data);
         alert("登录失败：" + payload.data);
     }
 }
-// ======== 初始化频道列表 ========
+// ======== 初始化频道列表,并将信息保存到全局对象中 ========
 function initChannels(channels) {
-    const channelList = document.getElementById("channelList");
-    const memberList = document.getElementById("memberList");
-    channelList.innerHTML = "";
-    memberList.innerHTML = "";
 
-    for (const channel of channels) {
+    const channelList = document.getElementById("channelList");
+    channelList.innerHTML = "";
+
+    Object.keys(ChatState.channels).forEach(channelName => {
         const div = document.createElement("div");
         div.className = "channel-item";
-        div.textContent = channel.channel_name;
-        div.onclick = () => {
-            renderMemberList(channel.channel_name,channel.members);
-            document.getElementById("currentChannel").textContent = channel.channel_name;
-        };
+        div.textContent = channelName;
+
+        // 为每个渠道增加点击事件，以便切换频道时为聊天窗口和成员列表渲染数据
+        div.onclick = () => showChannel(channelName);
         channelList.appendChild(div);
+    });
+}
+//
+function showChannel(channelName) {
+    ChatState.currentChannel = channelName;
+    const channel = ChatState.channels[channelName];
+
+    const currentUser = ChatState.currentUser;
+    const isMember = channel.members.includes(currentUser);
+
+    document.getElementById("currentChannel").textContent = channelName;
+    document.getElementById("memberCount").textContent = `成员数：${channel.members.length}`;
+    renderMemberList(channel.members);
+
+    const input = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    if (isMember) {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        renderMessages(channel.messages);
+    } else {
+        input.disabled = true;
+        sendBtn.disabled = true;
+        renderMessages([], true); // 显示提示遮罩
     }
 }
+
 
 // ======== 处理消息的广播响应 ========
 function handleMsgResponse(payload) {
-    const messageList = document.getElementById("messageList");
-    const div = document.createElement("div");
-    div.className = "message";
-    div.innerHTML = `<span class="username">${payload.sender}</span>: ${payload.message}`;
-    messageList.appendChild(div);
-    messageList.scrollTop = messageList.scrollHeight;
+    const {channel, sender, message} = payload;
+
+    // 把消息追加到本地缓存
+    if (!ChatState.channels[channel]) return;
+    ChatState.channels[channel].messages.push({sender, message});
+
+    // 如果当前打开的频道就是这个频道，则立即渲染
+    if (ChatState.currentChannel === channel) {
+        appendMessage(sender, message);
+    }
 }
+function renderMessages(messages, blocked = false) {
+    const list = document.getElementById("messageList");
+    list.innerHTML = "";
+    if (blocked) {
+        list.innerHTML = "<div class='welcome-message'><p>您不是该频道成员，无法查看消息</p></div>";
+        return;
+    }
+    messages.forEach(m => appendMessage(m.sender, m.message));
+    list.scrollTop = list.scrollHeight;
+}
+
+function appendMessage(sender, message) {
+    const list = document.getElementById("messageList");
+    const div = document.createElement("div");
+    div.className = sender === ChatState.currentUser ? "message user" : "message";
+    div.innerHTML = `<span class="username">${sender}</span>: ${message}`;
+    list.appendChild(div);
+}
+// ========================================================================
 
 // ======== 处理新创建频道的广播响应 ========
 function handleCreateChannelResponse(payload) {
-    initChannels(payload.channels);
+    ChatState.channels[payload.channel] = {members: [payload.user], messages: []};
+    initChannels();
 }
 // ======== 处理删除频道的广播响应 ========
 function handleDeleteChannelResponse(payload) {
-    initChannels(payload.channels);
-
-    // 如果删除的是当前频道，退出频道
-    const currentChannel = document.getElementById("currentChannel").textContent;
-    if (!payload.channels[currentChannel]) handleQuitChannelResponse({channel: currentChannel});
+    const {channel, user} = payload;
+    delete ChatState.channels[channel];
+    if (ChatState.currentChannel === payload.channel) {
+        ChatState.currentChannel = null;
+        document.getElementById("currentChannel").textContent = "请选择一个频道";
+    }
+    initChannels();
 }
+
 // ======== 处理加入频道的广播响应 ========
 function handleJoinChannelResponse(payload) {
-    // 更新当前频道
-    document.getElementById("currentChannel").textContent = payload.channel;
-
-    // 渲染成员列表
-    renderMemberList(payload.channel, payload.users);
-
-    // 激活输入框和发送按钮
-    document.getElementById("messageInput").disabled = false;
-    document.getElementById("sendBtn").disabled = false;
-
-    // 清空消息列表
-    document.getElementById("messageList").innerHTML = "";
+    const {channel, user} = payload;
+    if (!ChatState.channels[channel]) ChatState.channels[channel] = {members: [], messages: []};
+    if (!ChatState.channels[channel].members.includes(user)) {
+        ChatState.channels[channel].members.push(user);
+    }
+    if (ChatState.currentChannel === channel) renderMemberList(ChatState.channels[channel].members);
 }
 // ======== 处理加入频道的广播响应 ========
 function handleQuitChannelResponse(payload) {
-    const currentChannel = document.getElementById("currentChannel");
-    if (currentChannel.textContent === payload.channel) {
-        currentChannel.textContent = "请选择一个频道";
-        document.getElementById("messageInput").disabled = true;
-        document.getElementById("sendBtn").disabled = true;
-        document.getElementById("messageList").innerHTML = "";
-        document.getElementById("memberList").innerHTML = "";
-    }
+    const {channel, user} = payload;
+    const ch = ChatState.channels[channel];
+    if (ch) ch.members = ch.members.filter(u => u !== user);
+    if (ChatState.currentChannel === channel) renderMemberList(ch.members);
 }
 
 
 // ======== 渲染成员列表 ========
-function renderMemberList(channel, users) {
+function renderMemberList(users) {
     const memberList = document.getElementById("memberList");
     memberList.innerHTML = "";
     users.forEach(user => {
