@@ -1,21 +1,5 @@
 // 协议号定义
-const PROTOCOL = {
-    // 客户端 -> 服务器
-    LOGIN_REQUEST: 10001,
-    MSG_REQUEST: 11001,
-    CHANNEL_CREATE_REQUEST: 12001,
-    CHANNEL_DELETE_REQUEST: 12002,
-    JOIN_CHANNEL_REQUEST: 13001,
-    QUIT_CHANNEL_REQUEST: 13002,
-    
-    // 服务器 -> 客户端
-    LOGIN_RESPONSE: 20001,
-    MSG_RESPONSE: 21001,
-    CREATE_CHANNEL_RESPONSE: 22001,
-    DELETE_CHANNEL_RESPONSE: 22002,
-    JOIN_CHANNEL_RESPONSE: 23001,
-    QUIT_CHANNEL_RESPONSE: 23002
-};
+import {PROTOCOL} from './protocol.js';
 
 // 构建数据包
 function buildPacket(protocolId, jsonObj) {
@@ -40,7 +24,7 @@ function buildPacket(protocolId, jsonObj) {
 }
 
 // 登录请求
-function buildLoginPacket(userName, password) {
+export function buildLoginPacket(userName, password) {
     return buildPacket(PROTOCOL.LOGIN_REQUEST, {
         userName: userName,
         password: password
@@ -48,7 +32,7 @@ function buildLoginPacket(userName, password) {
 }
 
 // 发送消息
-function buildMessagePacket(sender, channel, message) {
+export function buildMessagePacket(sender, channel, message) {
     return buildPacket(PROTOCOL.MSG_REQUEST, {
         sender: sender,
         channel: channel,
@@ -57,7 +41,7 @@ function buildMessagePacket(sender, channel, message) {
 }
 
 // 创建频道
-function buildCreateChannelPacket(user, channel) {
+export function buildCreateChannelPacket(user, channel) {
     return buildPacket(PROTOCOL.CHANNEL_CREATE_REQUEST, {
         user: user,
         channel: channel
@@ -65,7 +49,7 @@ function buildCreateChannelPacket(user, channel) {
 }
 
 // 删除频道
-function buildDeleteChannelPacket(user, channel) {
+export function buildDeleteChannelPacket(user, channel) {
     return buildPacket(PROTOCOL.CHANNEL_DELETE_REQUEST, {
         user: user,
         channel: channel
@@ -73,7 +57,7 @@ function buildDeleteChannelPacket(user, channel) {
 }
 
 // 加入频道
-function buildJoinChannelPacket(user, channel) {
+export function buildJoinChannelPacket(user, channel) {
     return buildPacket(PROTOCOL.JOIN_CHANNEL_REQUEST, {
         user: user,
         channel: channel
@@ -81,7 +65,7 @@ function buildJoinChannelPacket(user, channel) {
 }
 
 // 退出频道
-function buildQuitChannelPacket(user, channel) {
+export function buildQuitChannelPacket(user, channel) {
     return buildPacket(PROTOCOL.QUIT_CHANNEL_REQUEST, {
         user: user,
         channel: channel

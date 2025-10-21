@@ -59,8 +59,8 @@
 	channel,
 	message
 }).
-%% 用户加入频道响应返回包
--record(channel_response_packet,{
+%% 用户频道响应返回包,依据协议号不同，user有不同的意义，如果是创建频道就是creater，如果是加入频道就是joiner
+-record(common_response_packet,{
 	user,
 	channel
 }).

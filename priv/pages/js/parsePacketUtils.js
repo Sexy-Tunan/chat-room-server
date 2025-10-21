@@ -1,5 +1,5 @@
 // 解析数据包
-function parsePacket(buffer) {
+export function parsePacket(buffer) {
     const view = new DataView(buffer);
     
     let offset = 0;
@@ -26,7 +26,7 @@ function parsePacket(buffer) {
     
     return {
         packetLength: packetLength,
-        protocolId: protocolId,
+        protocolNumber: protocolId,
         data: data
     };
 }
