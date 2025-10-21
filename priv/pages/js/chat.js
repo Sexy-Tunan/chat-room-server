@@ -1,0 +1,174 @@
+// chat.js
+import {buildLoginPacket, buildMessagePacket, buildCreateChannelPacket,buildDeleteChannelPacket,buildJoinChannelPacket,buildQuitChannelPacket} from './buildPacketUtils.js';
+import {parsePacket} from './parsePacketUtils.js';
+import {PROTOCOL} from './protocol.js';
+// ======== WebSocket 配置 ========
+let ws = null;
+const WS_URL = "ws://172.22.2.101:10086/websocket"; // 替换成你的服务端地址
+
+
+// ======== 页面加载时初始化 WebSocket ========
+window.addEventListener("DOMContentLoaded", () => {
+    connectWebSocket();
+});
+
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
+
+    ws.binaryType = "arraybuffer"; // 我们要发送二进制包
+
+    ws.onopen = () => {
+        console.log("WebSocket 已连接");
+        sendLoginRequest(localStorage.getItem('userName'), localStorage.getItem('password'));
+        showLoginOverlay(true);
+    };
+
+    ws.onmessage = (event) => {
+        handleServerPacket(parsePacket(event.data));
+    };
+
+    ws.onclose = () => {
+        console.log("WebSocket 已断开");
+        showLoginOverlay(false);
+    };
+
+    ws.onerror = (err) => {
+        console.error("WebSocket 错误:", err);
+        showLoginOverlay(false);
+    };
+}
+
+// ======== 显示/隐藏登录遮罩 ========
+function showLoginOverlay(show) {
+    const overlay = document.getElementById("loginOverlay");
+    overlay.style.display = show ? "flex" : "none";
+}
+
+// ======== 构建并发送登录请求包 ========
+// 自定义协议：包长(4字节) + 协议号(2字节) + 数据(JSON)
+function sendLoginRequest(user, password) {
+    var buffer = buildLoginPacket(user,password);
+
+    ws.send(buffer);
+    console.log("已发送登录请求:", buffer);
+}
+
+// ======== 加入频道请求 ========
+function joinChannel(channelName) {
+    const buffer = buildJoinChannelPacket(localStorage.get('userName'),channelName);
+
+    ws.send(buffer);
+    console.log("发送加入频道请求:", channelName);
+}
+// ======== 退出频道请求 ========
+function quitChannel(channelName) {
+    const buffer = buildQuitChannelPacket(localStorage.get('userName'),channelName);
+
+    ws.send(buffer);
+    console.log("发送加入频道请求:", channelName);
+}
+// ======== 创建频道请求 ========
+function createChannel(channelName) {
+    const buffer = buildCreateChannelPacket(localStorage.get('userName'),channelName);
+
+    ws.send(buffer);
+    console.log("发送加入频道请求:", channelName);
+}
+
+// ======== 删除频道请求 ========
+function deleteChannel(channelName) {
+    const buffer = buildDeleteChannelPacket(localStorage.get('userName'),channelName);
+
+    ws.send(buffer);
+    console.log("发送加入频道请求:", channelName);
+}
+
+
+// ===========================================================================================================
+// ============ 响应处理
+// ======== 处理服务端返回数据包 ========
+function handleServerPacket(parsedPacket) {
+
+    console.log("收到数据包 Protocol:", parsedPacket.protocolNumber, "Data:", parsedPacket.data);
+//    console.log("是否能解析存储常量的js对象", PROTOCOL.LOGIN_RESPONSE);
+
+    switch (parsedPacket.protocolNumber) {
+        case PROTOCOL.LOGIN_RESPONSE:
+            handleLoginResponse(parsedPacket.data);
+            break;
+        case 21001:
+            handleMsgResponse(parsedPacket.data);
+            break;
+        case 22001:
+            handleCreateChannelResponse(parsedPacket.data);
+            break;
+        case 22002:
+            handleDeleteChannelResponse(parsedPacket.data);
+            break;
+        case 23001:
+             handleJoinChannelResponse(parsedPacket.data);
+             break;
+        case 23002:
+            handleQuitChannelResponse(parsedPacket.data);
+            break;
+        default:
+            console.warn("未知协议号:", protocolNumber);
+    }
+}
+
+// ======== 处理登录响应 ========
+function handleLoginResponse(payload) {
+    // packet = { state: true/false, user: "username", data: {...} }
+    if (payload.state) {
+        console.log("登录验证成功:", payload.user);
+        showLoginOverlay(false);
+        // 可以初始化频道列表
+        initChannels(payload.data.channels);
+    } else {
+        console.error("登录失败:", payload.data);
+        alert("登录失败：" + payload.data);
+    }
+}
+// ======== 初始化频道列表 ========
+function initChannels(channels) {
+    const channelList = document.getElementById("channelList");
+    channelList.innerHTML = "";
+
+    for (const channelName in channels) {
+        const div = document.createElement("div");
+        div.className = "channel-item";
+        div.textContent = channelName;
+        div.onclick = () => joinChannel(channelName);
+        channelList.appendChild(div);
+    }
+}
+
+// ======== 处理消息的广播响应 ========
+function handleMsgResponse(payload) {
+    const messageList = document.getElementById("messageList");
+    const div = document.createElement("div");
+    div.className = "message";
+    div.innerHTML = `<span class="username">${payload.sender}</span>: ${payload.message}`;
+    messageList.appendChild(div);
+    messageList.scrollTop = messageList.scrollHeight;
+}
+
+// ======== 处理新创建频道的广播响应 ========
+function handleCreateChannelResponse(payload) {
+
+}
+// ======== 处理删除频道的广播响应 ========
+function handleDeleteChannelResponse(payload) {
+
+}
+// ======== 处理加入频道的广播响应 ========
+function handleJoinChannelResponse(payload) {
+
+}
+// ======== 处理加入频道的广播响应 ========
+function handleQuitChannelResponse(payload) {
+
+}
+
+
+
