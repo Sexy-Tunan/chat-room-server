@@ -10,7 +10,7 @@
 -author("Administrator").
 -behavior(gen_server).
 
--define(WORLD_CHANNEL_NAME, "world").
+-define(WORLD_CHANNEL_NAME, <<"world">>).
 
 %% API
 -export([start/0,stop/0]).
@@ -94,21 +94,26 @@ handle_call({register,Creator, ChannelName}, _From, State) ->
 
 %% 管理删除频道的回调方法
 handle_call({revoke,Deleter, ChannelName}, _From, State) ->
-	%% 删除频道进程，停止频道
-	case ets:lookup(State, ChannelName) of
-		[#channel_pid{pid = ChannelPid}] -> 
-			ChannelPid ! stop,
-			ets:delete(State, ChannelName);
-		[] -> io:format("警告：频道不存在~n")
-	end,
-	%% 数据库删除频道记录
-	database_queryer:remove_channel_record(Deleter, ChannelName),
-	%% 通过世界频道进程将删除的频道信息广播给所有用户进程并通知客户端
-	case ets:lookup(State,?WORLD_CHANNEL_NAME) of
-		[#channel_pid{pid = WorldPid}] -> WorldPid ! {delete_channel, Deleter, ChannelName};
-		[] -> io:format("警告：世界频道不存在~n")
-	end,
-	{reply, ok, State};
+	%% 先检查数据库权限，只有创建者才能删除
+	case database_queryer:remove_channel_record(Deleter, ChannelName) of
+		ok ->
+			%% 删除频道进程，停止频道
+			case ets:lookup(State, ChannelName) of
+				[#channel_pid{pid = ChannelPid}] -> 
+					ChannelPid ! stop,
+					ets:delete(State, ChannelName);
+				[] -> io:format("警告：频道进程不存在~n")
+			end,
+			%% 通过世界频道进程将删除的频道信息广播给所有用户进程并通知客户端
+			case ets:lookup(State,?WORLD_CHANNEL_NAME) of
+				[#channel_pid{pid = WorldPid}] -> WorldPid ! {delete_channel, Deleter, ChannelName};
+				[] -> io:format("警告：世界频道不存在~n")
+			end,
+			{reply, ok, State};
+		{error, Reason} ->
+			io:format("删除频道失败: ~p~n", [Reason]),
+			{reply, {error, Reason}, State}
+	end;
 
 handle_call(all, _From, State) ->
 	Records = ets:match(State,'$1'),

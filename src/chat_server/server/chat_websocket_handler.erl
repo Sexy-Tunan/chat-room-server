@@ -85,15 +85,30 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			ChannelName = maps:get(channel,DataMap),
 			io:format("用户[~p]创建了[~p]频道~n",[Creator,ChannelName]),
 			{ok,ChannelPid} = channel_manager:register_channel(Creator,ChannelName),
+			
+			%% 创建者自动加入频道
+			database_queryer:add_channel_user_record(Creator, ChannelName),
+			%% 向频道进程注册创建者的信息
+			ChannelPid ! {user_login_register, Creator, self()},
+			
 			{ok, State};
 
 		%% 用户删除频道
 		?CHANNEL_DELETE_REQUEST_PROTOCOL_NUMBER ->
 			Deleter = maps:get(user,DataMap),
 			ChannelName = maps:get(channel,DataMap),
-			io:format("用户[~p]删除了[~p]频道~n",[Deleter,ChannelName]),
-			{ok,_} = channel_manager:revoke_channel(Deleter,ChannelName),
-			{ok, State};
+			io:format("用户[~ts]尝试删除频道[~ts]~n",[Deleter,ChannelName]),
+			case channel_manager:revoke_channel(Deleter,ChannelName) of
+				ok ->
+					io:format("频道[~ts]删除成功~n",[ChannelName]),
+					{ok, State};
+				{error, not_creator} ->
+					io:format("用户[~ts]不是频道[~ts]的创建者，无法删除~n",[Deleter,ChannelName]),
+					{ok, State};
+				{error, Reason} ->
+					io:format("删除频道失败: ~p~n", [Reason]),
+					{ok, State}
+			end;
 
 		%% 用户加入频道
 		?JOIN_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
@@ -101,8 +116,8 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			ChannelName = maps:get(channel,DataMap),
 			io:format("用户[~p]加入了[~p]频道~n",[Joiner,ChannelName]),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
-			%% 数据库新增频道与用户关系记录
-			database_queryer:add_channel_user_record(ChannelName,Joiner),
+			%% 数据库新增频道与用户关系记录（参数顺序：Member, ChannelName）
+			database_queryer:add_channel_user_record(Joiner, ChannelName),
 			%% 向频道进程注册自己的信息，其会向其他客户端广播说明自己的加入
 			ChannelPid ! {user_join_register, Joiner, self()},
 			%% 返回当前频道的信息,并构造数据包返回
@@ -112,10 +127,10 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			PacketLength = 2 + byte_size(PayloadJsonBin),
 			Packet = <<
 				PacketLength:32/big-unsigned-integer,
-				?Login_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer,
+				?JOIN_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer,
 				PayloadJsonBin/binary
 			>>,
-			{ok, {binary,Packet}, State};
+			{reply, {binary,Packet}, State};
 
 		%% 用户退出频道
 		?QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
@@ -123,9 +138,9 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			ChannelName = maps:get(channel,DataMap),
 			io:format("用户[~ts]退出了[~ts]频道~n",[Quitter,ChannelName]),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
-			%% 数据库新增频道与用户关系记录
-			database_queryer:remove_channel_user_record(ChannelName,Quitter),
-			%% 向频道进程注册自己的信息，其会向其他客户端广播说明自己的加入
+			%% 数据库删除频道与用户关系记录（参数顺序：Member, ChannelName）
+			database_queryer:remove_channel_user_record(Quitter, ChannelName),
+			%% 向频道进程注销自己的信息，其会向其他客户端广播说明自己的退出
 			ChannelPid ! {user_revoke, Quitter},
 			{ok, State}
 	end;
@@ -138,11 +153,12 @@ websocket_info({msg_broadcast, ChannelName, SenderName, Message}, State) ->
 	io:format("用户[~ts]接受到了频道[~ts]的广播消息[~ts],发消息者[~ts]~n",[maps:get(user,State),ChannelName,Message,SenderName]),
 	PayloadJsonBin = jsx:encode(#{channel => ChannelName, sender => SenderName, message => Message}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
-	Packet = <<PacketLength:32/big-unsigned-integer, ?MSG_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	Packet = <<PacketLength:32/big-unsigned-integer, ?MSG_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端用户加入频道信息
 websocket_info({user_join_channel, UserName, ChannelName}, State) ->
+	io:format("用户[~ts]接受到了[~ts]加入频道[~ts]的广播消息~n",[maps:get(user,State),UserName,ChannelName]),
 	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
 	Packet = <<PacketLength:32/big-unsigned-integer, ?JOIN_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
@@ -150,6 +166,7 @@ websocket_info({user_join_channel, UserName, ChannelName}, State) ->
 
 %% 接受频道广播消息 告知客户端用户退出频道信息
 websocket_info({user_quit_channel, UserName, ChannelName}, State) ->
+	io:format("用户[~ts]接受到了[~ts]退出频道[~ts]的广播消息~n",[maps:get(user,State),UserName,ChannelName]),
 	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
 	Packet = <<PacketLength:32/big-unsigned-integer, ?QUIT_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
@@ -157,13 +174,16 @@ websocket_info({user_quit_channel, UserName, ChannelName}, State) ->
 
 %% 接受频道广播消息 告知客户端新建频道信息
 websocket_info({create_channel, Creator, CreatedChannelName}, State) ->
+	io:format("用户[~ts]接受到了新建频道[~ts]的广播消息，创建者[~ts]~n",[maps:get(user,State),CreatedChannelName,Creator]),
 	PayloadJsonBin = jsx:encode(#{user => Creator, channel => CreatedChannelName}),
+	io:format("发送频道创建广播，JSON: ~p~n", [PayloadJsonBin]),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
 	Packet = <<PacketLength:32/big-unsigned-integer, ?CREATE_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端删除频道信息
 websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
+	io:format("用户[~ts]接受到了删除频道[~ts]的广播消息，删除者[~ts]~n",[maps:get(user,State),DeletedChannelName,Deleter]),
 	PayloadJsonBin = jsx:encode(#{user => Deleter, channel => DeletedChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
 	Packet = <<PacketLength:32/big-unsigned-integer, ?DELETE_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,

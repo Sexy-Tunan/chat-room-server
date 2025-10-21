@@ -47,6 +47,18 @@ window.addEventListener("DOMContentLoaded", () => {
             quitChannel(currentChannel);
         }
     };
+
+    // 删除频道按钮
+    const deleteBtn = document.getElementById("deleteChannelBtn");
+    deleteBtn.onclick = () => {
+        const currentChannel = document.getElementById("currentChannel").textContent;
+        if (currentChannel && currentChannel !== "请选择一个频道") {
+            if (confirm(`确定要删除频道"${currentChannel}"吗？删除后无法恢复！`)) {
+                deleteChannel(currentChannel);
+            }
+        }
+    };
+
     connectWebSocket();
 });
 
@@ -128,14 +140,38 @@ function quitChannel(channelName) {
     const buffer = buildQuitChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
-    console.log("发送加入频道请求:", channelName);
+    console.log("发送退出频道请求:", channelName);
+    
+    // 本地立即更新：从成员列表中移除自己
+    const currentUser = ChatState.currentUser;
+    const channel = ChatState.channels[channelName];
+    if (channel) {
+        channel.members = channel.members.filter(u => u !== currentUser);
+    }
+    
+    // 如果当前正在查看这个频道，切换到其他频道或显示欢迎页面
+    if (ChatState.currentChannel === channelName) {
+        // 清空当前频道
+        ChatState.currentChannel = null;
+        document.getElementById("currentChannel").textContent = "请选择一个频道";
+        document.getElementById("memberCount").textContent = "";
+        document.getElementById("memberList").innerHTML = "";
+        
+        // 显示欢迎消息
+        const messageList = document.getElementById("messageList");
+        messageList.innerHTML = '<div class="welcome-message"><h3>您已退出频道</h3><p>选择其他频道继续聊天</p></div>';
+        
+        // 禁用输入框
+        document.getElementById("messageInput").disabled = true;
+        document.getElementById("sendBtn").disabled = true;
+    }
 }
 // ======== 创建频道请求 ========
 function createChannel(channelName) {
     const buffer = buildCreateChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
-    console.log("发送加入频道请求:", channelName);
+    console.log("发送创建频道请求:", channelName);
 }
 
 // ======== 删除频道请求 ========
@@ -143,7 +179,7 @@ function deleteChannel(channelName) {
     const buffer = buildDeleteChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
-    console.log("发送加入频道请求:", channelName);
+    console.log("发送删除频道请求:", channelName);
 }
 
 
@@ -160,7 +196,7 @@ function handleServerPacket(parsedPacket) {
             handleLoginResponse(parsedPacket.data);
             break;
         case PROTOCOL.JOIN_CHANNEL_RESPONSE:
-            handleJoinChannelResponse();
+            handleJoinChannelResponse(parsedPacket.data);
             break;
         case PROTOCOL.MSG_BROADCAST:
             handleMsgBroadcast(parsedPacket.data);
@@ -194,7 +230,8 @@ function handleLoginResponse(payload) {
         payload.data.forEach(ch => {
             ChatState.channels[ch.channel_name] = {
                 members: ch.members,
-                messages: []
+                messages: [],
+                creator: ch.creator || 'unknown'
             };
         });
         // 可以初始化频道列表
@@ -227,6 +264,7 @@ function showChannel(channelName) {
 
     const currentUser = ChatState.currentUser;
     const isMember = channel.members.includes(currentUser);
+    const isCreator = channel.creator === currentUser;
 
     document.getElementById("currentChannel").textContent = channelName;
     document.getElementById("memberCount").textContent = `成员数：${channel.members.length}`;
@@ -234,20 +272,52 @@ function showChannel(channelName) {
 
     const input = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
+    const deleteBtn = document.getElementById("deleteChannelBtn");
+    const leaveBtn = document.getElementById("leaveChannelBtn");
 
+    // 显示/隐藏删除按钮（只有创建者才能删除）
+    if (isCreator) {
+        deleteBtn.style.display = "inline-block";
+    } else {
+        deleteBtn.style.display = "none";
+    }
+
+    // 显示/隐藏退出按钮（只有成员才能退出，创建者也可以退出但不能删除后退出）
     if (isMember) {
+        leaveBtn.style.display = "inline-block";
         input.disabled = false;
         sendBtn.disabled = false;
         renderMessages(channel.messages);
     } else {
+        leaveBtn.style.display = "none";
         input.disabled = true;
         sendBtn.disabled = true;
         renderMessages([], true, channelName); // 显示提示遮罩
     }
 }
 
-function handleJoinChannelResponse(){
-
+function handleJoinChannelResponse(payload){
+    console.log("处理加入频道响应");
+    // payload = { state: true, data: {channel_name: "...", members: [...]} }
+    if (payload.state) {
+        const channelInfo = payload.data;
+        const channelName = channelInfo.channel_name;
+        
+        // 更新本地频道成员列表
+        if (ChatState.channels[channelName]) {
+            ChatState.channels[channelName].members = channelInfo.members;
+        }
+        
+        // 如果当前正在查看这个频道，刷新显示
+        if (ChatState.currentChannel === channelName) {
+            showChannel(channelName);
+        }
+        
+        console.log("成功加入频道:", channelName);
+    } else {
+        console.error("加入频道失败");
+        alert("加入频道失败");
+    }
 }
 
 // ======== 处理消息的广播响应 ========
@@ -296,19 +366,55 @@ function appendMessage(sender, message) {
 
 // ======== 处理新创建频道的广播响应 ========
 function handleCreateChannelBroadcast(payload) {
-    console.log("处理新频道创建的广播消息");
-    ChatState.channels[payload.channel] = {members: [payload.user], messages: []};
+    console.log("=== 处理新频道创建的广播消息 ===");
+    console.log("收到的 payload:", payload);
+    
+    const {channel, user} = payload;
+    console.log("频道名:", channel, "类型:", typeof channel);
+    console.log("创建者:", user, "类型:", typeof user);
+    console.log("当前频道状态:", ChatState.channels);
+    
+    // 添加新频道到本地状态（创建者作为第一个成员）
+    if (!ChatState.channels[channel]) {
+        ChatState.channels[channel] = {members: [user], messages: [], creator: user};
+        console.log("新频道已添加到状态");
+    } else {
+        console.log("频道已存在");
+    }
+    
+    console.log("调用 initChannels() 刷新列表");
+    // 刷新频道列表显示
     initChannels();
+    
+    console.log("=== 处理完成 ===");
 }
 // ======== 处理删除频道的广播响应 ========
 function handleDeleteChannelBroadcast(payload) {
-    console.log("处理频被删除的广播消息");
+    console.log("处理频道被删除的广播消息");
     const {channel, user} = payload;
+    
+    // 从本地状态中删除频道
     delete ChatState.channels[channel];
-    if (ChatState.currentChannel === payload.channel) {
+    
+    // 如果当前正在查看被删除的频道，清空显示
+    if (ChatState.currentChannel === channel) {
         ChatState.currentChannel = null;
         document.getElementById("currentChannel").textContent = "请选择一个频道";
+        document.getElementById("memberCount").textContent = "";
+        document.getElementById("memberList").innerHTML = "";
+        
+        // 显示欢迎消息
+        const messageList = document.getElementById("messageList");
+        messageList.innerHTML = '<div class="welcome-message">频道已被删除，请选择其他频道</div>';
+        
+        // 禁用输入和按钮
+        document.getElementById("messageInput").disabled = true;
+        document.getElementById("sendBtn").disabled = true;
+        document.getElementById("deleteChannelBtn").style.display = "none";
+        document.getElementById("leaveChannelBtn").style.display = "none";
     }
+    
+    // 刷新频道列表
     initChannels();
 }
 

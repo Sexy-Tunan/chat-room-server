@@ -149,8 +149,8 @@ init_data(Tables) ->
 			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("Bruce",utf8,utf8)}),
 			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("Ben",utf8,utf8)}),
 			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("菜狗",utf8,utf8)}),
-			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of bruce",utf8,utf8), user_name = unicode:characters_to_binary("Ben",utf8,utf8)}),
-			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of ben",utf8,utf8), user_name = unicode:characters_to_binary("Bruce",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of bruce",utf8,utf8), user_name = unicode:characters_to_binary("Bruce",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of ben",utf8,utf8), user_name = unicode:characters_to_binary("Ben",utf8,utf8)}),
 			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("菜狗的频道",utf8,utf8), user_name = unicode:characters_to_binary("菜狗",utf8,utf8)})
 	end.
 
@@ -217,7 +217,7 @@ handle_call({add_channel, TableName, Creator, ChannelName},_From, State) ->
 			end
 	end;
 
-%% 删除频道记录
+%% 删除频道记录（将alive标记为false，而不是真正删除）
 handle_call({remove_channel, TableName, Owner, ChannelName},_From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName,Tables, undefined) of
@@ -226,8 +226,11 @@ handle_call({remove_channel, TableName, Owner, ChannelName},_From, State) ->
 			%% 判断是否是频道创建者要删除频道
 			case ets:lookup(Ets, ChannelName) of
 				[#channel{creator = Creator}] ->
-					case string:equal(Creator,Owner) of
-						true -> ets:delete(Ets,ChannelName),{reply, ok, State};
+					case Creator =:= Owner of
+						true -> 
+							%% 将频道标记为已删除，而不是真正删除记录
+							ets:insert(Ets, #channel{name = ChannelName, creator = Creator, alive = false}),
+							{reply, ok, State};
 						false -> {reply, {error, not_creator}, State}
 					end;
 				[] -> {reply, {error, not_found}, State}
@@ -263,11 +266,25 @@ handle_call({query_joined_channel_info_with_members, TableName, User}, _From, St
 			%% 先查询用户加入了哪些频道
 %%			io:format("查询[~ts]已加入的频道信息(包括频道成员)~n",[User]),
 			JoinedChannelList = ets:match(Ets, {'_', '$1',User}),
+			%% 获取 channel 表的 ETS
+			ChannelEts = case maps:get(channel, Tables, undefined) of
+				undefined -> undefined;
+				#{ets := CEts} -> CEts
+			end,
 			%% 已加入的频道[[<<"channel of bruce">>],[<<"world">>]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
 			ChannelInfoList = lists:map(
 				fun([ChannelName]) ->
 					Members = ets:match(Ets, {'_',ChannelName,'$1'}),
-					#{channel_name => ChannelName, members => [Member || [Member] <- Members]} end
+					%% 查询频道的创建者
+					Creator = case ChannelEts of
+						undefined -> <<"unknown">>;
+						_ -> 
+							case ets:lookup(ChannelEts, ChannelName) of
+								[#channel{creator = C}] -> C;
+								_ -> <<"unknown">>
+							end
+					end,
+					#{channel_name => ChannelName, members => [Member || [Member] <- Members], creator => Creator} end
 				, JoinedChannelList),
 			{reply, {ok, ChannelInfoList}, State}
 	end;

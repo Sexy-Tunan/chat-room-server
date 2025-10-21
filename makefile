@@ -26,9 +26,6 @@ restart:
 	@$(REBAR) compile
 	@erl -pa _build/default/lib/*/ebin -eval "application:ensure_all_started(ranch), application:ensure_all_started(cowboy), application:ensure_all_started($(PROJECT)), application:start($(PROJECT))."
 
-# 打包
-tar:
-	@$(REBAR) as prod tar
 
 # 清理
 clean:
