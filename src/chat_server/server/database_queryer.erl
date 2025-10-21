@@ -19,7 +19,7 @@
 %% 用户api
 -export([add_user_record/2,query_user_message_by_user_name/1, query_user_message_by_channel_name/1]).
 %% 频道api
--export([add_channel_record/2,remove_channel_record/2,query_all_channel_name_alive/0]).
+-export([add_channel_record/2,remove_channel_record/2,query_all_channel_name_alive/0, query_all_channel_info_with_members/0]).
 %% 频道用户api
 -export([add_channel_user_record/2, remove_channel_user_record/2, query_joined_channel_info_with_members/1, query_joined_channel_info/1]).
 
@@ -78,6 +78,9 @@ remove_channel_user_record(Member, ChannelName) -> gen_server:call(?MODULE,{remo
 %% @Return {ok, [{channel_name => ChannelName, members => Members},{channel_name => ChannelName, members => Members},......] }
 query_joined_channel_info_with_members(UserName) -> gen_server:call(?MODULE,{query_joined_channel_info_with_members, channel_user, UserName}).
 
+%% @Return {ok, [{channel_name => ChannelName, members => Members},{channel_name => ChannelName, members => Members},......] }
+query_all_channel_info_with_members() -> gen_server:call(?MODULE,{query_all_channel_info_with_members, channel_user, channel}).
+
 query_joined_channel_info(UserName) -> gen_server:call(?MODULE,{query_joined_channel_info, channel_user, UserName}).
 
 %% ====================================================================
@@ -122,23 +125,29 @@ init_data(Tables) ->
 	case maps:get(user,Tables,undefined) of
 		undefined -> nothing;
 		#{ets := Ets1} ->
-			ets:insert(Ets1,#user{name="Bruce",password="123456"}),
-			ets:insert(Ets1,#user{name="Ben",password="123456"})
+			ets:insert(Ets1,#user{name=unicode:characters_to_binary("Bruce",utf8,utf8),password=unicode:characters_to_binary("123456",utf8,utf8)}),
+			ets:insert(Ets1,#user{name=unicode:characters_to_binary("Ben",utf8,utf8),password=unicode:characters_to_binary("123456",utf8,utf8)}),
+			ets:insert(Ets1,#user{name=unicode:characters_to_binary("菜狗",utf8,utf8),password=unicode:characters_to_binary("123456",utf8,utf8)})
 	end,
 
 	case maps:get(channel,Tables,undefined) of
 		undefined -> nothing;
 		#{ets := Ets2} ->
-			ets:insert(Ets2,#channel{name="channel of bruce",creator = "Bruce", alive = true}),
-			ets:insert(Ets2,#channel{name=?WORLD_CHANNEL,creator = "admin", alive = true})
+			ets:insert(Ets2,#channel{name=unicode:characters_to_binary("channel of bruce"),creator = unicode:characters_to_binary("Bruce",utf8,utf8), alive = true}),
+			ets:insert(Ets2,#channel{name=unicode:characters_to_binary("channel of ben"),creator = unicode:characters_to_binary("Ben",utf8,utf8), alive = true}),
+			ets:insert(Ets2,#channel{name=unicode:characters_to_binary(?WORLD_CHANNEL),creator = unicode:characters_to_binary("admin",utf8,utf8), alive = true}),
+			ets:insert(Ets2,#channel{name=unicode:characters_to_binary("菜狗的频道"),creator = unicode:characters_to_binary("菜狗",utf8,utf8), alive = true})
 	end,
 
 	case maps:get(channel_user,Tables,undefined) of
 		undefined -> nothing;
 		#{ets := Ets3} ->
-		ets:insert(Ets3,#channel_user{channel_name = ?WORLD_CHANNEL, user_name = "Bruce"}),
-		ets:insert(Ets3,#channel_user{channel_name = ?WORLD_CHANNEL, user_name = "Ben"}),
-		ets:insert(Ets3,#channel_user{channel_name = "channel of bruce", user_name = "Bruce"})
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("Bruce",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("Ben",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary(?WORLD_CHANNEL,utf8,utf8), user_name = unicode:characters_to_binary("菜狗",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of bruce",utf8,utf8), user_name = unicode:characters_to_binary("Ben",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("channel of ben",utf8,utf8), user_name = unicode:characters_to_binary("Bruce",utf8,utf8)}),
+			ets:insert(Ets3,#channel_user{channel_name = unicode:characters_to_binary("菜狗的频道",utf8,utf8), user_name = unicode:characters_to_binary("菜狗",utf8,utf8)})
 	end.
 
 
@@ -248,15 +257,31 @@ handle_call({query_joined_channel_info_with_members, TableName, User}, _From, St
 		#{ets := Ets} ->
 			%% tableName 为 channel_user
 			%% 先查询用户加入了哪些频道
-			io:format("查询[~p]已加入的频道信息(包括频道成员)~n",[User]),
+%%			io:format("查询[~ts]已加入的频道信息(包括频道成员)~n",[User]),
 			JoinedChannelList = ets:match(Ets, {'_', '$1',User}),
-			io:format("已加入的频道~p~n",[JoinedChannelList]),
-			%% 已加入的频道[["channel of bruce"],["world"]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
+			%% 已加入的频道[[<<"channel of bruce">>],[<<"world">>]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
 			ChannelInfoList = lists:map(
 				fun([ChannelName]) ->
 					Members = ets:match(Ets, {'_',ChannelName,'$1'}),
 					#{channel_name => ChannelName, members => [Member || [Member] <- Members]} end
 				, JoinedChannelList),
+			{reply, {ok, ChannelInfoList}, State}
+	end;
+
+handle_call({query_all_channel_info_with_members, ChannelUserChannelName, ChannelTableName}, _From, State) ->
+	#state{tables = Tables} = State,
+
+	#{ets := ChannelEts} = maps:get(ChannelTableName,Tables),
+	AllChannelNameList = ets:match(ChannelEts, {'_','$1','_','_'}),
+	case maps:get(ChannelUserChannelName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% 已加入的频道[[<<"channel of bruce">>],[<<"world">>]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
+			ChannelInfoList = lists:map(
+				fun([ChannelName]) ->
+					Members = ets:match(Ets, {'_',ChannelName,'$1'}),
+					#{channel_name => ChannelName, members => [Member || [Member] <- Members]} end
+				, AllChannelNameList),
 			{reply, {ok, ChannelInfoList}, State}
 	end;
 

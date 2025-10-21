@@ -22,9 +22,9 @@ start(ChannelName) ->
 
 init([ChannelName]) ->
 	put(channelName, ChannelName),
-	io:format("创建[~s]频道进程~n",[ChannelName]),
+	io:format("创建[~ts]频道进程,[~p]~n",[ChannelName,self()]),
 	%% 不使用named_table选项，这样就不会全局注册导致冲突
-	Ets = ets:new(user_pid_ets,[set, private, {keypos, 1}]),
+	Ets = ets:new(user_pid_ets,[set, private, {keypos, #user_pid.user_name}]),
 	{ok,Ets}.
 
 
@@ -39,13 +39,16 @@ handle_info(stop, State) -> {stop, normal, State};
 handle_info({msg,SenderName,Message},State) ->
 	%% 聊天消息广播
 	ChannelName = get(channelName),
-	[PidList] = ets:match(State, {'_','$1'}),
-	[Pid ! {msg_broadcast,ChannelName,SenderName,Message} || Pid <- PidList],
+	PidList = ets:match(State, {'_','_','$1'}),
+
+	%% 得到的是[[pid1],[[pid2]]，需展开
+	[Pid ! {msg_broadcast,ChannelName,SenderName,Message} || [Pid] <- PidList],
 	{noreply, State};
 
 %% 用户向频道注册自己的信息
 handle_info({user_join_register, UserName, From},State) ->
 	%% 用户加入频道，或者用户连接了服务都需要来到频道注册自己的信息，不然无法进行广播
+	io:format("用户[~ts]加入频道[~ts]后向注册了自己的信息",[UserName,get(channelName)]),
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	%% 广播其他用户有新用户加入频道
 	ChannelName = get(channelName),
@@ -55,6 +58,7 @@ handle_info({user_join_register, UserName, From},State) ->
 
 handle_info({user_login_register, UserName, From},State) ->
 	%% 用户加入频道，或者用户连接了服务都需要来到频道注册自己的信息，不然无法进行广播
+	io:format("用户[~ts]登录后向频道[~ts]注册了自己的信息~n",[UserName,get(channelName)]),
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	{noreply, State};
 
@@ -78,6 +82,12 @@ handle_info({create_channel, Creator, CreatedChannelName},State) ->
 handle_info({delete_channel, Deleter, DeletedChannelName},State) ->
 	[PidList] = ets:match(State, {'_','$1'}),
 	[Pid ! {delete_channel,Deleter,DeletedChannelName} || Pid <- PidList],
+	{noreply, State};
+
+handle_info(show_all,State) ->
+	Records = ets:match(State, '$1'),
+	io:format("进程[~ts]的用户已注册信息~n",[get(channelName)]),
+	lists:foreach(fun([Record]) -> io:format(">>>> [~ts] == ~p~n",[Record#user_pid.user_name,Record#user_pid.pid]) end, Records),
 	{noreply, State};
 
 handle_info(_Info, State) -> {noreply, State}.

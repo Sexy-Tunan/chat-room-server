@@ -15,7 +15,7 @@
 %% API
 -export([start/0,stop/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
--export([query_channel_pid/1, query_channel_pid_batch/1, register_channel/2, revoke_channel/2]).
+-export([query_channel_pid/1, query_channel_pid_batch/1, register_channel/2, revoke_channel/2, query_all/0]).
 
 
 -include("../../../include/database/chat_database.hrl").
@@ -34,8 +34,10 @@ init([]) ->
 		undefined ->
 			%% 查询数据库，得到所有的未删除的频道，创建对应的所有频道进程
 			{ok, ChannelNameList} = database_queryer:query_all_channel_name_alive(),
+			io:format("频道管理者查询得到的未删除的频道：~n"),
+			lists:foreach(fun(Channel) -> io:format("--------~ts~n",[Channel]) end, ChannelNameList),
 			%% 循环创建频道进程，并将对应关系插入
-			ChannelEts = ets:new(channel_pid_ets, [bag, named_table, private, {keypos, 1}]),
+			ChannelEts = ets:new(channel_pid_ets, [set, named_table, private, {keypos, #channel_pid.channel_name}]),
 			lists:foreach(fun(ChannelName) ->
 				{ok, Pid} = channel:start(ChannelName),
 				ets:insert(ChannelEts, #channel_pid{channel_name = ChannelName, pid = Pid}) end
@@ -53,6 +55,7 @@ query_channel_pid(ChannelName) -> gen_server:call(?MODULE, {query_pid, ChannelNa
 query_channel_pid_batch(ChannelNameList) -> gen_server:call(?MODULE, {query_pid_batch, ChannelNameList}).
 register_channel(Creator,ChannelName) -> gen_server:call(?MODULE, {register, Creator, ChannelName}).
 revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter, ChannelName}).
+query_all() -> gen_server:call(?MODULE, all).
 
 
 
@@ -69,6 +72,7 @@ handle_call({query_pid,ChannelName}, _From, State) ->
 
 %% 批量查询pid
 handle_call({query_pid_batch,ChannelNameList}, _From, State) ->
+
 	ChannelPidList = [
 		Pid || Name <- ChannelNameList, [#channel_pid{pid = Pid}] <- [ets:lookup(State, Name)]  %% 只匹配查到的
 	],
@@ -106,6 +110,9 @@ handle_call({revoke,Deleter, ChannelName}, _From, State) ->
 	end,
 	{reply, ok, State};
 
+handle_call(all, _From, State) ->
+	Records = ets:match(State,'$1'),
+	{reply, {ok, [Record || [Record] <- Records]}, State};
 
 handle_call(stop, _From, State) ->
 	{stop, normal, stopped, State}.

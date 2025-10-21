@@ -181,6 +181,7 @@ function handleServerPacket(parsedPacket) {
 
 // ======== 处理登录响应 ========
 function handleLoginResponse(payload) {
+    console.log("处理登录消息");
     // packet = { state: true/false, user: "username", data: {...} }
     if (payload.state) {
         console.log("登录验证成功:", payload.user);
@@ -245,6 +246,7 @@ function showChannel(channelName) {
 
 // ======== 处理消息的广播响应 ========
 function handleMsgResponse(payload) {
+    console.log("处理频道广播消息");
     const {channel, sender, message} = payload;
 
     // 把消息追加到本地缓存
@@ -278,11 +280,13 @@ function appendMessage(sender, message) {
 
 // ======== 处理新创建频道的广播响应 ========
 function handleCreateChannelResponse(payload) {
+    console.log("处理新频道创建的广播消息");
     ChatState.channels[payload.channel] = {members: [payload.user], messages: []};
     initChannels();
 }
 // ======== 处理删除频道的广播响应 ========
 function handleDeleteChannelResponse(payload) {
+    console.log("处理频被删除的广播消息");
     const {channel, user} = payload;
     delete ChatState.channels[channel];
     if (ChatState.currentChannel === payload.channel) {
@@ -294,6 +298,7 @@ function handleDeleteChannelResponse(payload) {
 
 // ======== 处理加入频道的广播响应 ========
 function handleJoinChannelResponse(payload) {
+    console.log("处理用户加入频道的广播消息");
     const {channel, user} = payload;
     if (!ChatState.channels[channel]) ChatState.channels[channel] = {members: [], messages: []};
     if (!ChatState.channels[channel].members.includes(user)) {
@@ -303,6 +308,7 @@ function handleJoinChannelResponse(payload) {
 }
 // ======== 处理加入频道的广播响应 ========
 function handleQuitChannelResponse(payload) {
+    console.log("处理用户退出频道的广播消息");
     const {channel, user} = payload;
     const ch = ChatState.channels[channel];
     if (ch) ch.members = ch.members.filter(u => u !== user);

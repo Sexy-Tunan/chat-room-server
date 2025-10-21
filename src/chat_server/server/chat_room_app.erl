@@ -18,9 +18,9 @@ start(_Type, _Args) ->
 		{'_', [
 			{"/websocket", chat_websocket_handler, []},
 			%% 静态文件
-			{"/", cowboy_static, {priv_file, chat_room, "static/pages/login.html"}},
-			{"/chat.html", cowboy_static, {priv_file, chat_room, "static/pages/chat.html"}},
-			{"/[...]", cowboy_static, {priv_dir, chat_room, "static"}}
+			{"/", cowboy_static, {priv_file, chat_room, "/priv/static/pages/login.html"}},
+			{"/chat.html", cowboy_static, {priv_file, chat_room, "/priv/static/pages/chat.html"}},
+			{"/[...]", cowboy_static, {priv_dir, chat_room, "/priv/static"}}
 		]}
 	]),
 	{ok, _} = cowboy:start_clear(http, [{port, 10086}], #{
