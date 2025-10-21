@@ -105,7 +105,17 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			database_queryer:add_channel_user_record(ChannelName,Joiner),
 			%% 向频道进程注册自己的信息，其会向其他客户端广播说明自己的加入
 			ChannelPid ! {user_join_register, Joiner, self()},
-			{ok, State};
+			%% 返回当前频道的信息,并构造数据包返回
+			{ok, ChannelInfo} = database_queryer:query_channel_info_with_members_by_channel(ChannelName),
+
+			PayloadJsonBin = jsx:encode(#{state => true, data => ChannelInfo}),
+			PacketLength = 2 + byte_size(PayloadJsonBin),
+			Packet = <<
+				PacketLength:32/big-unsigned-integer,
+				?Login_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer,
+				PayloadJsonBin/binary
+			>>,
+			{ok, {binary,Packet}, State};
 
 		%% 用户退出频道
 		?QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
@@ -135,28 +145,28 @@ websocket_info({msg_broadcast, ChannelName, SenderName, Message}, State) ->
 websocket_info({user_join_channel, UserName, ChannelName}, State) ->
 	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
-	Packet = <<PacketLength:32/big-unsigned-integer, ?JOIN_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	Packet = <<PacketLength:32/big-unsigned-integer, ?JOIN_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端用户退出频道信息
 websocket_info({user_quit_channel, UserName, ChannelName}, State) ->
 	PayloadJsonBin = jsx:encode(#{user => UserName, channel => ChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
-	Packet = <<PacketLength:32/big-unsigned-integer, ?QUIT_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	Packet = <<PacketLength:32/big-unsigned-integer, ?QUIT_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端新建频道信息
 websocket_info({create_channel, Creator, CreatedChannelName}, State) ->
 	PayloadJsonBin = jsx:encode(#{user => Creator, channel => CreatedChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
-	Packet = <<PacketLength:32/big-unsigned-integer, ?CREATE_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	Packet = <<PacketLength:32/big-unsigned-integer, ?CREATE_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 %% 接受频道广播消息 告知客户端删除频道信息
 websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
 	PayloadJsonBin = jsx:encode(#{user => Deleter, channel => DeletedChannelName}),
 	PacketLength = 2 + byte_size(PayloadJsonBin),
-	Packet = <<PacketLength:32/big-unsigned-integer, ?DELETE_CHANNEL_RESPONSE_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
+	Packet = <<PacketLength:32/big-unsigned-integer, ?DELETE_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
 
 websocket_info(_Info, State) ->

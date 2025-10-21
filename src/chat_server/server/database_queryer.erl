@@ -21,7 +21,7 @@
 %% 频道api
 -export([add_channel_record/2,remove_channel_record/2,query_all_channel_name_alive/0, query_all_channel_info_with_members/0]).
 %% 频道用户api
--export([add_channel_user_record/2, remove_channel_user_record/2, query_joined_channel_info_with_members/1, query_joined_channel_info/1]).
+-export([add_channel_user_record/2, remove_channel_user_record/2, query_joined_channel_info_with_members/1, query_joined_channel_info/1, query_channel_info_with_members_by_channel/1]).
 
 
 
@@ -80,6 +80,10 @@ query_joined_channel_info_with_members(UserName) -> gen_server:call(?MODULE,{que
 
 %% @Return {ok, [{channel_name => ChannelName, members => Members},{channel_name => ChannelName, members => Members},......] }
 query_all_channel_info_with_members() -> gen_server:call(?MODULE,{query_all_channel_info_with_members, channel_user, channel}).
+
+%% 根据频道名字查询频道的信息，包括频道成员
+%% @Return {ok, [{channel_name => ChannelName, members => Members},{channel_name => ChannelName, members => Members},......] }
+query_channel_info_with_members_by_channel(ChannelName) -> gen_server:call(?MODULE,{query_channel_info_with_members_by_channel, channel_user, ChannelName}).
 
 query_joined_channel_info(UserName) -> gen_server:call(?MODULE,{query_joined_channel_info, channel_user, UserName}).
 
@@ -283,6 +287,19 @@ handle_call({query_all_channel_info_with_members, ChannelUserChannelName, Channe
 					#{channel_name => ChannelName, members => [Member || [Member] <- Members]} end
 				, AllChannelNameList),
 			{reply, {ok, ChannelInfoList}, State}
+	end;
+
+
+handle_call({query_channel_info_with_members_by_channel, TableName, ChannelName}, _From, State) ->
+	#state{tables = Tables} = State,
+
+	case maps:get(TableName,Tables, undefined) of
+		undefined -> {reply, {error, no_such_table}, State};
+		#{ets := Ets} ->
+			%% 已加入的频道[[<<"channel of bruce">>],[<<"world">>]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
+			Members = ets:match(Ets, {'_',ChannelName,'$1'}),
+			ChannelInfoWithMembers = #{channel_name => ChannelName, members => [Member || [Member] <- Members]},
+			{reply, {ok, ChannelInfoWithMembers}, State}
 	end;
 
 handle_call({query_joined_channel_info, TableName, User}, _From, State) ->

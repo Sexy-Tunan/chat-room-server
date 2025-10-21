@@ -4,7 +4,7 @@ import {parsePacket} from './parsePacketUtils.js';
 import {PROTOCOL} from './protocol.js';
 // ======== WebSocket 配置 ========
 let ws = null;
-const WS_URL = "ws://172.22.2.101:10086/websocket"; // 替换成你的服务端地址
+const WS_URL = "/websocket"; // 替换成你的服务端地址
 
 // 本地缓存的所有频道、成员、消息
 const ChatState = {
@@ -159,20 +159,23 @@ function handleServerPacket(parsedPacket) {
         case PROTOCOL.LOGIN_RESPONSE:
             handleLoginResponse(parsedPacket.data);
             break;
-        case 21001:
-            handleMsgResponse(parsedPacket.data);
+        case PROTOCOL.JOIN_CHANNEL_RESPONSE:
+            handleJoinChannelResponse();
             break;
-        case 22001:
-            handleCreateChannelResponse(parsedPacket.data);
+        case PROTOCOL.MSG_BROADCAST:
+            handleMsgBroadcast(parsedPacket.data);
             break;
-        case 22002:
-            handleDeleteChannelResponse(parsedPacket.data);
+        case PROTOCOL.CREATE_CHANNEL_BROADCAST:
+            handleCreateChannelBroadcast(parsedPacket.data);
             break;
-        case 23001:
-             handleJoinChannelResponse(parsedPacket.data);
+        case PROTOCOL.DELETE_CHANNEL_BROADCAST:
+            handleDeleteChannelBroadcast(parsedPacket.data);
+            break;
+        case PROTOCOL.JOIN_CHANNEL_BROADCAST:
+             handleJoinChannelBroadcast(parsedPacket.data);
              break;
-        case 23002:
-            handleQuitChannelResponse(parsedPacket.data);
+        case PROTOCOL.QUIT_CHANNEL_BROADCAST:
+            handleQuitChannelBroadcast(parsedPacket.data);
             break;
         default:
             console.warn("未知协议号:", protocolNumber);
@@ -243,9 +246,12 @@ function showChannel(channelName) {
     }
 }
 
+function handleJoinChannelResponse(){
+
+}
 
 // ======== 处理消息的广播响应 ========
-function handleMsgResponse(payload) {
+function handleMsgBroadcast(payload) {
     console.log("处理频道广播消息");
     const {channel, sender, message} = payload;
 
@@ -289,13 +295,13 @@ function appendMessage(sender, message) {
 // ========================================================================
 
 // ======== 处理新创建频道的广播响应 ========
-function handleCreateChannelResponse(payload) {
+function handleCreateChannelBroadcast(payload) {
     console.log("处理新频道创建的广播消息");
     ChatState.channels[payload.channel] = {members: [payload.user], messages: []};
     initChannels();
 }
 // ======== 处理删除频道的广播响应 ========
-function handleDeleteChannelResponse(payload) {
+function handleDeleteChannelBroadcast(payload) {
     console.log("处理频被删除的广播消息");
     const {channel, user} = payload;
     delete ChatState.channels[channel];
@@ -307,7 +313,7 @@ function handleDeleteChannelResponse(payload) {
 }
 
 // ======== 处理加入频道的广播响应 ========
-function handleJoinChannelResponse(payload) {
+function handleJoinChannelBroadcast(payload) {
     console.log("处理用户加入频道的广播消息");
     const {channel, user} = payload;
     if (!ChatState.channels[channel]) ChatState.channels[channel] = {members: [], messages: []};
@@ -317,7 +323,7 @@ function handleJoinChannelResponse(payload) {
     if (ChatState.currentChannel === channel) renderMemberList(ChatState.channels[channel].members);
 }
 // ======== 处理加入频道的广播响应 ========
-function handleQuitChannelResponse(payload) {
+function handleQuitChannelBroadcast(payload) {
     console.log("处理用户退出频道的广播消息");
     const {channel, user} = payload;
     const ch = ChatState.channels[channel];

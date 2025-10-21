@@ -14,10 +14,11 @@
 %% SERVER --> CLIENT
 -define(Login_RESPONSE_PROTOCOL_NUMBER, 20001).
 -define(MSG_RESPONSE_PROTOCOL_NUMBER, 21001).
--define(CREATE_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 22001).
--define(DELETE_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 22002).
--define(JOIN_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 23001).
--define(QUIT_CHANNEL_RESPONSE_PROTOCOL_NUMBER, 23002).
+-define(CREATE_CHANNEL_BROADCAST_PROTOCOL_NUMBER, 22001).
+-define(DELETE_CHANNEL_BROADCAST_PROTOCOL_NUMBER, 22002).
+-define(JOIN_CHANNEL_BROADCAST_PROTOCOL_NUMBER, 23001).
+-define(QUIT_CHANNEL_BROADCAST_PROTOCOL_NUMBER, 23002).
+
 
 
 
@@ -46,11 +47,16 @@
 	state,
 	user,
 	%% {data ==>
-	%% 		{channels ==>
-	%% 				{channel1 ==> [usr1,user2,user3], channel2 ==> [user1,user2,user3] ......}
-	%% 		}
+	%% 		[{channel_name => ChannelName1, members => [usr1,user2,user3]}, {channel_name => ChannelName1, members => [usr1,user2,user3]}]
 	%% }
 	%% state为false时，data包装错误原因； state为true时，data包装已加入的频道以及频道所拥有的用户信息返回
+	data
+}).
+-record(join_response_packet,{
+	state,
+	%% {data ==>
+	%% 		[{channel_name => ChannelName1, members => [usr1,user2,user3]}, {channel_name => ChannelName1, members => [usr1,user2,user3]}]
+	%% }
 	data
 }).
 %% 聊天消息广播返回响应包格式
@@ -59,9 +65,10 @@
 	channel,
 	message
 }).
-%% 用户频道响应返回包,依据协议号不同，user有不同的意义，如果是创建频道就是creater，如果是加入频道就是joiner
+%% 用户频道广播消息响应,依据协议号不同，user有不同的意义，如果是创建频道就是creater，如果是加入频道就是joiner
 -record(common_response_packet,{
 	user,
 	channel
 }).
+
 
