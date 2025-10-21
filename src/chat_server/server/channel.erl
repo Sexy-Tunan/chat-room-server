@@ -52,8 +52,8 @@ handle_info({user_join_register, UserName, From},State) ->
 	ets:insert(State,#user_pid{user_name = UserName, pid = From}),
 	%% 广播其他用户有新用户加入频道
 	ChannelName = get(channelName),
-	[PidList] = ets:match(State, {'_','$1'}),
-	[Pid ! {user_join_channel,UserName,ChannelName} || Pid <- PidList],
+	PidList = ets:match(State, {'_','_','$1'}),
+	[Pid ! {user_join_channel,UserName,ChannelName} || [Pid] <- PidList],
 	{noreply, State};
 
 handle_info({user_login_register, UserName, From},State) ->

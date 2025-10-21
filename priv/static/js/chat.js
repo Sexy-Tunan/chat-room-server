@@ -239,7 +239,7 @@ function showChannel(channelName) {
     } else {
         input.disabled = true;
         sendBtn.disabled = true;
-        renderMessages([], true); // 显示提示遮罩
+        renderMessages([], true, channelName); // 显示提示遮罩
     }
 }
 
@@ -258,13 +258,23 @@ function handleMsgResponse(payload) {
         appendMessage(sender, message);
     }
 }
-function renderMessages(messages, blocked = false) {
+function renderMessages(messages, blocked = false, channelName = null) {
     const list = document.getElementById("messageList");
     list.innerHTML = "";
+
     if (blocked) {
-        list.innerHTML = "<div class='welcome-message'><p>您不是该频道成员，无法查看消息</p></div>";
+        list.innerHTML = "<div class='welcome-message'><p>您不是该频道成员，无法查看消息</p><button id='joinChannelBtn' class='join-btn'>加入频道</button></div>";
+        const joinBtn = document.getElementById("joinChannelBtn");
+        joinBtn.onclick = () => {
+            if (channelName) {
+//                joinBtn.disabled = true;
+//                joinBtn.textContent = "正在加入...";
+                joinChannel(channelName);
+            }
+        };
         return;
     }
+
     messages.forEach(m => appendMessage(m.sender, m.message));
     list.scrollTop = list.scrollHeight;
 }

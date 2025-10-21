@@ -345,3 +345,20 @@ body {
 .btn-secondary:hover {
     background-color: #c0c0c0;
 }
+
+.join-btn {
+    margin-top: 10px;
+    padding: 8px 14px;
+    background-color: #3a8ef6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: 0.2s;
+}
+
+.join-btn:hover {
+    background-color: #2c6ed5;
+}
+
