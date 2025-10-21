@@ -21,7 +21,9 @@
 -include("../../../include/database/chat_database.hrl").
 
 start() ->
-	gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+	{ok, Pid} = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
+	io:format("创建频道管理者进程[~p]~n",[Pid]),
+	{ok,Pid}.
 stop() ->
 	gen_server:call(?MODULE, stop).
 

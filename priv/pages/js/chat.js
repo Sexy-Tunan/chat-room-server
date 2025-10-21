@@ -7,10 +7,66 @@ let ws = null;
 const WS_URL = "ws://172.22.2.101:10086/websocket"; // 替换成你的服务端地址
 
 
-// ======== 页面加载时初始化 WebSocket ========
+// ======== 页面加载时初始化 WebSocket 和 chat页面控件绑定========
 window.addEventListener("DOMContentLoaded", () => {
+    // 发送消息按钮
+    const sendBtn = document.getElementById("sendBtn");
+    const messageInput = document.getElementById("messageInput");
+
+    sendBtn.onclick = sendMessage;
+    messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMessage();
+    });
+
+    // 创建频道弹窗
+    const createChannelBtn = document.getElementById("createChannelBtn");
+    const createModal = document.getElementById("createChannelModal");
+    const confirmCreateBtn = document.getElementById("confirmCreateBtn");
+    const cancelCreateBtn = document.getElementById("cancelCreateBtn");
+    const closeModal = createModal.querySelector(".close");
+
+    createChannelBtn.onclick = () => (createModal.style.display = "flex");
+    confirmCreateBtn.onclick = () => {
+        const channelName = document.getElementById("newChannelName").value.trim();
+        if (channelName) createChannel(channelName);
+        createModal.style.display = "none";
+    };
+    cancelCreateBtn.onclick = closeModal.onclick = () => (createModal.style.display = "none");
+
+    // 退出频道按钮
+    const leaveBtn = document.getElementById("leaveChannelBtn");
+    leaveBtn.onclick = () => {
+        const currentChannel = document.getElementById("currentChannel").textContent;
+        if (currentChannel && currentChannel !== "请选择一个频道") {
+            quitChannel(currentChannel);
+        }
+    };
     connectWebSocket();
 });
+
+// ======== 发送消息 ========
+function sendMessage() {
+    const messageInput = document.getElementById("messageInput");
+    const message = messageInput.value.trim();
+    const currentChannel = document.getElementById("currentChannel").textContent;
+
+    if (!message || !currentChannel || currentChannel === "请选择一个频道") return;
+
+    const buffer = buildMessagePacket(localStorage.getItem('userName'), currentChannel, message);
+    ws.send(buffer);
+
+    // 本地渲染自己的消息
+    const messageList = document.getElementById("messageList");
+    const div = document.createElement("div");
+    div.className = "message user";
+    div.innerHTML = `<span class="username">你</span>: ${message}`;
+    messageList.appendChild(div);
+    messageList.scrollTop = messageList.scrollHeight;
+
+    messageInput.value = "";
+}
+
+
 
 function connectWebSocket() {
     ws = new WebSocket(WS_URL);
@@ -155,20 +211,54 @@ function handleMsgResponse(payload) {
 
 // ======== 处理新创建频道的广播响应 ========
 function handleCreateChannelResponse(payload) {
-
+    initChannels(payload.channels);
 }
 // ======== 处理删除频道的广播响应 ========
 function handleDeleteChannelResponse(payload) {
+    initChannels(payload.channels);
 
+    // 如果删除的是当前频道，退出频道
+    const currentChannel = document.getElementById("currentChannel").textContent;
+    if (!payload.channels[currentChannel]) handleQuitChannelResponse({channel: currentChannel});
 }
 // ======== 处理加入频道的广播响应 ========
 function handleJoinChannelResponse(payload) {
+    // 更新当前频道
+    document.getElementById("currentChannel").textContent = payload.channel;
 
+    // 渲染成员列表
+    renderMemberList(payload.channel, payload.users);
+
+    // 激活输入框和发送按钮
+    document.getElementById("messageInput").disabled = false;
+    document.getElementById("sendBtn").disabled = false;
+
+    // 清空消息列表
+    document.getElementById("messageList").innerHTML = "";
 }
 // ======== 处理加入频道的广播响应 ========
 function handleQuitChannelResponse(payload) {
-
+    const currentChannel = document.getElementById("currentChannel");
+    if (currentChannel.textContent === payload.channel) {
+        currentChannel.textContent = "请选择一个频道";
+        document.getElementById("messageInput").disabled = true;
+        document.getElementById("sendBtn").disabled = true;
+        document.getElementById("messageList").innerHTML = "";
+        document.getElementById("memberList").innerHTML = "";
+    }
 }
 
+
+// ======== 渲染成员列表 ========
+function renderMemberList(channel, users) {
+    const memberList = document.getElementById("memberList");
+    memberList.innerHTML = "";
+    users.forEach(user => {
+        const div = document.createElement("div");
+        div.className = "member-item";
+        div.textContent = user;
+        memberList.appendChild(div);
+    });
+}
 
 

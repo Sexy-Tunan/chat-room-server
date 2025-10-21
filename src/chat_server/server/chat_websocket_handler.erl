@@ -19,11 +19,11 @@
 
 
 init(Req, _Opt) ->
-	io:format("有客户端尝试与服务器进行websocket连接"),
+	io:format("有客户端尝试与服务器进行websocket连接,正在尝试对连接升级为websocket连接~n"),
 	{cowboy_websocket, Req, #{}}.
 
 websocket_init(State) ->
-	io:format("有客户端与服务器建立websocket连接~n"),
+	io:format("升级成功,客户端与服务器建立websocket连接~n"),
 	erlang:start_timer(1000, self(), <<"Hello!">>),
 	{ok, State}.
 
@@ -34,14 +34,17 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 	case ProtoId of
 		%% 处理登录请求
 		?LOGIN_REQUEST_PROTOCOL_NUMBER ->
-			UserName = maps:get(userName, DataMap),
+			UserName = binary_to_list(maps:get(userName, DataMap)),
+%%			io:format("jsx:decode解析出来的值是二进制？：~p",[is_binary(UserName)]),
 			{PayloadJsonBin,NewState} = case login_check(JsonBin) of
 			    true ->
 					io:format("用户登录成功~n"),
 					TempState = State#{login_state => true, user => UserName},
 			 	    %% 查询数据库该用户加入了哪些频道，这些频道有哪些用户
 					{ok,JoinedChannelInfoWithMembers} = database_queryer:query_joined_channel_info_with_members(UserName),
+					io:format("登录用户[~p]已加入频道的信息: ~p~n",[UserName,JoinedChannelInfoWithMembers]),
 			 	    PayloadJsonBin = jsx:encode(#{state => true, user => UserName, data => JoinedChannelInfoWithMembers}),
+					io:format("编码后的[~p]登录返回信息: ~p~n",[UserName,PayloadJsonBin]),
 					%% 向已加入的频道注册自己的登录信息，以便频道信息广播能接收到
 					{ok,JoinChannelList} = database_queryer:query_joined_channel_info(UserName),
 					{ok,ChannelPidList} = channel_manager:query_channel_pid_batch(JoinChannelList),
@@ -67,9 +70,9 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 		%% 用户发送频道消息
 		?MSG_REQUEST_PROTOCOL_NUMBER ->
 			%% 向频道管理者得到所属频道PID
-			Sender = maps:get(sender,DataMap),
-			ChannelName = maps:get(channel,DataMap),
-			Message = maps:get(message,DataMap),
+			Sender = binary_to_list(maps:get(sender,DataMap)),
+			ChannelName = binary_to_list(maps:get(channel,DataMap)),
+			Message = binary_to_list(maps:get(message,DataMap)),
 			{ok, ChannelPid} = channel_manager:query_channel_pid(ChannelName),
 			ChannelPid ! {msg, Sender, Message},
 			{ok, State};
@@ -77,22 +80,22 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 		%% 用户创建频道
 		?CHANNEL_CREAT_REQUEST_PROTOCOL_NUMBER ->
 			%% 向频道管理者发送新增频道消息
-			Creator = maps:get(user,DataMap),
-			ChannelName = maps:get(channel,DataMap),
+			Creator = binary_to_list(maps:get(user,DataMap)),
+			ChannelName = binary_to_list(maps:get(channel,DataMap)),
 			{ok,ChannelPid} = channel_manager:register_channel(Creator,ChannelName),
 			{ok, State};
 
 		%% 用户删除频道
 		?CHANNEL_DELETE_REQUEST_PROTOCOL_NUMBER ->
-			Deleter = maps:get(user,DataMap),
-			ChannelName = maps:get(channel,DataMap),
+			Deleter = binary_to_list(maps:get(user,DataMap)),
+			ChannelName = binary_to_list(maps:get(channel,DataMap)),
 			{ok,_} = channel_manager:revoke_channel(Deleter,ChannelName),
 			{ok, State};
 
 		%% 用户加入频道
 		?JOIN_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
-			Joiner = maps:get(user,DataMap),
-			ChannelName = maps:get(channel,DataMap),
+			Joiner = binary_to_list(maps:get(user,DataMap)),
+			ChannelName = binary_to_list(maps:get(channel,DataMap)),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
 			%% 数据库新增频道与用户关系记录
 			database_queryer:add_channel_user_record(ChannelName,Joiner),
@@ -102,8 +105,8 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 
 		%% 用户退出频道
 		?QUIT_CHANNEL_REQUEST_PROTOCOL_NUMBER ->
-			Quitter = maps:get(user,DataMap),
-			ChannelName = maps:get(channel,DataMap),
+			Quitter = binary_to_list(maps:get(user,DataMap)),
+			ChannelName = binary_to_list(maps:get(channel,DataMap)),
 			{ok,ChannelPid} = channel_manager:query_channel_pid(ChannelName),
 			%% 数据库新增频道与用户关系记录
 			database_queryer:remove_channel_user_record(ChannelName,Quitter),
@@ -172,12 +175,13 @@ terminate(_Reason, PartialReq, State) ->
 login_check(JsonBin) ->
 	%% 默认将键转为原子
 	DataMpa = jsx:decode(JsonBin, [return_maps, {labels, atom}]),
-	UserName = maps:get(userName, DataMpa),
-	Password = maps:get(password, DataMpa),
-	case database_queryer:query_user_message_by_user_name(binary_to_list(UserName)) of
-		{ok, User} -> string:equal(binary_to_list(Password), User#user.password);
+	UserName = binary_to_list(maps:get(userName, DataMpa)),
+	Password = binary_to_list(maps:get(password, DataMpa)),
+	case database_queryer:query_user_message_by_user_name(UserName) of
+		{ok, User} -> string:equal(Password, User#user.password);
 		not_found ->
 			%% 用户不存在，为其注册
+			io:format("用户[~s]不存在，为其进行注册~n",[UserName]),
 			database_queryer:add_user_record(UserName,Password),
 			true
 	end.

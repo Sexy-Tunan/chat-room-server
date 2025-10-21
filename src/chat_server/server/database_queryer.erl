@@ -53,7 +53,7 @@ add_user_record(UserName,Password) -> gen_server:call(?MODULE,{add_user, user, U
 
 %% @doc 根据频道名字其所属的用户信息
 %% @Return {ok,UserNameList} | {error,not_found}
-query_user_message_by_channel_name(ChannelName) -> gen_server:call(?MODULE,{query_user, user, channel_name, ChannelName}).
+query_user_message_by_channel_name(ChannelName) -> gen_server:call(?MODULE,{query_user, channel_user, channel_name, ChannelName}).
 
 %% @doc 查询所有未删除的频道名字
 %% @Return {ok,ChannelNameList} | {error,not_found}
@@ -96,6 +96,7 @@ init([IsNeedInitData]) ->
 		true -> init_data(Tables);
 		false -> do_nothing
 	end,
+	io:format("数据查询处理者加载成功[~p]~n",[self()]),
 	{ok, #state{tables = Tables}}.
 
 load_all_dets_to_ets(TableInfos) ->
@@ -116,6 +117,7 @@ load_from_dets(Dets, Ets) ->
 	ok.
 
 init_data(Tables) ->
+	io:format("往ets中插入一些数据~n"),
 	%% 插入部分数据到ets
 	case maps:get(user,Tables,undefined) of
 		undefined -> nothing;
@@ -127,16 +129,16 @@ init_data(Tables) ->
 	case maps:get(channel,Tables,undefined) of
 		undefined -> nothing;
 		#{ets := Ets2} ->
-			ets:insert(Ets2,#channel{name="bruce的频道",creator = "Bruce", alive = true}),
-			ets:insert(Ets2,#channel{name="Ben的频道",creator = "Ben", alive = true}),
-			ets:insert(Ets2,#channel{name="world",creator = "admin", alive = true})
+			ets:insert(Ets2,#channel{name="channel of bruce",creator = "Bruce", alive = true}),
+			ets:insert(Ets2,#channel{name=?WORLD_CHANNEL,creator = "admin", alive = true})
 	end,
 
-	case maps:get(msg,Tables,undefined) of
+	case maps:get(channel_user,Tables,undefined) of
 		undefined -> nothing;
 		#{ets := Ets3} ->
-			ets:insert(Ets3,#msg{user_name = "Bruce", channel_name = "Bruce的频道", time = calendar:now_to_local_time(os:timestamp()), message = "你好呀Bruce"}),
-			ets:insert(Ets3,#msg{user_name = "Ben", channel_name = "Ben的频道", time = calendar:now_to_local_time(os:timestamp()), message = "你好呀Ben"})
+		ets:insert(Ets3,#channel_user{channel_name = ?WORLD_CHANNEL, user_name = "Bruce"}),
+		ets:insert(Ets3,#channel_user{channel_name = ?WORLD_CHANNEL, user_name = "Ben"}),
+		ets:insert(Ets3,#channel_user{channel_name = "channel of bruce", user_name = "Bruce"})
 	end.
 
 
@@ -166,21 +168,14 @@ handle_call({add_user, TableName, UserName, Password}, _From, State) ->
 	end;
 
 %% 根据频道名字查询关联的用户信息
+%% table -> channel_user
 handle_call({query_user, TableName, channel_name, ChannelName}, _From, State) ->
 	#state{tables = Tables} = State,
 	case maps:get(TableName, Tables, undefined) of
 		undefined -> {reply, {error, no_table}, State};
 		#{ets := Ets} ->
-			case string:equal(ChannelName, ?WORLD_CHANNEL) of
-				%% 世界频道特殊处理
-				true -> {reply, {ok, ets:match(Ets, {'_','_','$1'})}, State};
-				false ->
-					case ets:match(Ets, {'_',ChannelName,'$1'}) of
-						 UserNameList -> {reply, {ok, UserNameList}, State};
-						 [] -> {reply, {error,not_found}, State}
-					end
-			end
-
+			UserNameList = ets:match(Ets, {'_',ChannelName,'$1'}),
+			{reply, {ok, [X || [X] <- UserNameList]}, State}
 	end;
 
 %% 查询所有存活的频道名字
@@ -189,8 +184,8 @@ handle_call({query_channel, alive, TableName},_From, State) ->
 	case maps:get(TableName,Tables, undefined) of
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
-			ChannelNameList = ets:match(Ets, {'$1', '_', true}),
-			{reply, {ok, ChannelNameList}, State}
+			ChannelNameList = ets:match(Ets, {'_', '$1', '_', true}),
+			{reply, {ok, [X || [X] <- ChannelNameList]}, State}
 	end;
 
 %% 新增频道记录
@@ -253,11 +248,14 @@ handle_call({query_joined_channel_info_with_members, TableName, User}, _From, St
 		#{ets := Ets} ->
 			%% tableName 为 channel_user
 			%% 先查询用户加入了哪些频道
-			JoinedChannelList = ets:match(Ets, {'$1',User}),
+			io:format("查询[~p]已加入的频道信息(包括频道成员)~n",[User]),
+			JoinedChannelList = ets:match(Ets, {'_', '$1',User}),
+			io:format("已加入的频道~p~n",[JoinedChannelList]),
+			%% 已加入的频道[["channel of bruce"],["world"]]  ,外层是一个列表，列表里的每一个元素还是列表，元素列表里面只有一个元素，就是字符串
 			ChannelInfoList = lists:map(
-				fun(ChannelName) ->
-					[Members] = ets:match(Ets, {ChannelName,'$1'}),
-					#{channel_name => ChannelName, members => Members} end
+				fun([ChannelName]) ->
+					Members = ets:match(Ets, {'_',ChannelName,'$1'}),
+					#{channel_name => ChannelName, members => [Member || [Member] <- Members]} end
 				, JoinedChannelList),
 			{reply, {ok, ChannelInfoList}, State}
 	end;
@@ -268,8 +266,8 @@ handle_call({query_joined_channel_info, TableName, User}, _From, State) ->
 		undefined -> {reply, {error, no_such_table}, State};
 		#{ets := Ets} ->
 			%% 查询用户加入了哪些频道
-			JoinedChannelList = ets:match(Ets, {'$1',User}),
-			{reply, {ok, JoinedChannelList}, State}
+			JoinedChannelList = ets:match(Ets, {'_','$1',User}),
+			{reply, {ok, [X || [X] <- JoinedChannelList]}, State}
 	end;
 
 handle_call(stop, _From, State) ->
@@ -278,6 +276,11 @@ handle_call(stop, _From, State) ->
 	write_ets_back_to_dets(Tables),
 	{stop, normal, stopped, State}.
 
+
+handle_cast(_Msg, State) -> {noreply, State}.
+handle_info(_Info, State) -> {noreply, State}.
+
+%% 将ets中的数据写回dets
 write_ets_back_to_dets(Tables) ->
 	%% 便利Tables映射组将ets数据写回dets
 	maps:foreach(
@@ -287,9 +290,5 @@ write_ets_back_to_dets(Tables) ->
 		end,
 		Tables
 	).
-
-handle_cast(_Msg, State) -> {noreply, State}.
-handle_info(_Info, State) -> {noreply, State}.
-
 
 

@@ -22,8 +22,7 @@ start(ChannelName) ->
 
 init([ChannelName]) ->
 	put(channelName, ChannelName),
-	%% 查询所有关联的用户名
-	UserNameList = database_queryer:query_user_message_by_channel_name(ChannelName),
+	io:format("创建[~s]频道进程~n",[ChannelName]),
 	%% 不使用named_table选项，这样就不会全局注册导致冲突
 	Ets = ets:new(user_pid_ets,[set, private, {keypos, 1}]),
 	{ok,Ets}.
