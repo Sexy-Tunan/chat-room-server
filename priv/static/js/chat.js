@@ -226,6 +226,9 @@ function handleLoginResponse(payload) {
         console.log("登录验证成功:", payload.user);
         showLoginOverlay(false);
 
+        // 更新当前用户（使用服务器返回的值，确保一致性）
+        ChatState.currentUser = payload.user;
+
         // 保存信息全局对象ChatState
         payload.data.forEach(ch => {
             ChatState.channels[ch.channel_name] = {
@@ -234,6 +237,10 @@ function handleLoginResponse(payload) {
                 creator: ch.creator || 'unknown'
             };
         });
+        
+        console.log("登录后频道信息:", ChatState.channels);
+        console.log("当前用户:", ChatState.currentUser);
+        
         // 可以初始化频道列表
         initChannels();
     } else {
@@ -266,6 +273,12 @@ function showChannel(channelName) {
     const isMember = channel.members.includes(currentUser);
     const isCreator = channel.creator === currentUser;
 
+    console.log("=== showChannel 调试信息 ===");
+    console.log("频道名:", channelName);
+    console.log("频道创建者:", channel.creator, "类型:", typeof channel.creator);
+    console.log("当前用户:", currentUser, "类型:", typeof currentUser);
+    console.log("是否为创建者:", isCreator, "比较结果:", channel.creator === currentUser);
+
     document.getElementById("currentChannel").textContent = channelName;
     document.getElementById("memberCount").textContent = `成员数：${channel.members.length}`;
     renderMemberList(channel.members);
@@ -277,8 +290,10 @@ function showChannel(channelName) {
 
     // 显示/隐藏删除按钮（只有创建者才能删除）
     if (isCreator) {
+        console.log("✓ 显示删除按钮");
         deleteBtn.style.display = "inline-block";
     } else {
+        console.log("✗ 隐藏删除按钮");
         deleteBtn.style.display = "none";
     }
 
@@ -451,7 +466,7 @@ function renderMemberList(users) {
 }
 
 
-// 将二进制转utf8字符串，因为erlang将字符串转成二进制
+// 将二进制转utf8字符串
 function deepDecode(data) {
     if (Array.isArray(data)) {
         // 如果是字符码数组（都是数字）

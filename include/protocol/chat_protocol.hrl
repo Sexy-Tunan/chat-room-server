@@ -48,7 +48,7 @@
 	state,
 	user,
 	%% {data ==>
-	%% 		[{channel_name => ChannelName1, members => [usr1,user2,user3]}, {channel_name => ChannelName1, members => [usr1,user2,user3]}]
+	%% 		[{channel_name => ChannelName1, members => [usr1,user2,user3], creator => UserName}, {channel_name => ChannelName1, members => [usr1,user2,user3], creator => UserName}]
 	%% }
 	%% state为false时，data包装错误原因； state为true时，data包装已加入的频道以及频道所拥有的用户信息返回
 	data
