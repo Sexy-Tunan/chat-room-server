@@ -63,7 +63,7 @@ revoke_channel(Deleter,ChannelName) -> gen_server:call(?MODULE, {revoke, Deleter
 %% 查询pid
 handle_call({query_pid,ChannelName}, _From, State) ->
 	case ets:lookup(State,ChannelName) of
-		[#channel_pid{pid = ChannelPid}] -> {reply, {ok, ChannelPid}, State};
+		[Record] -> {reply, {ok, Record#channel_pid.pid}, State};
 		[] -> {reply, {error, not_found}, State}
 	end;
 

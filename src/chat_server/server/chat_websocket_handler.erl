@@ -44,7 +44,6 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 					{ok,JoinedChannelInfoWithMembers} = database_queryer:query_joined_channel_info_with_members(UserName),
 					io:format("登录用户[~p]已加入频道的信息: ~p~n",[UserName,JoinedChannelInfoWithMembers]),
 			 	    PayloadJsonBin = jsx:encode(#{state => true, user => UserName, data => JoinedChannelInfoWithMembers}),
-					io:format("编码后的[~p]登录返回信息: ~p~n",[UserName,PayloadJsonBin]),
 					%% 向已加入的频道注册自己的登录信息，以便频道信息广播能接收到
 					{ok,JoinChannelList} = database_queryer:query_joined_channel_info(UserName),
 					{ok,ChannelPidList} = channel_manager:query_channel_pid_batch(JoinChannelList),

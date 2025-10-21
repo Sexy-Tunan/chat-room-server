@@ -80,7 +80,8 @@ function connectWebSocket() {
     };
 
     ws.onmessage = (event) => {
-        handleServerPacket(parsePacket(event.data));
+        // 将解包解码后的数据进行处理
+        handleServerPacket(deepDecode(parsePacket(event.data)));
     };
 
     ws.onclose = () => {
@@ -111,21 +112,21 @@ function sendLoginRequest(user, password) {
 
 // ======== 加入频道请求 ========
 function joinChannel(channelName) {
-    const buffer = buildJoinChannelPacket(localStorage.get('userName'),channelName);
+    const buffer = buildJoinChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
     console.log("发送加入频道请求:", channelName);
 }
 // ======== 退出频道请求 ========
 function quitChannel(channelName) {
-    const buffer = buildQuitChannelPacket(localStorage.get('userName'),channelName);
+    const buffer = buildQuitChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
     console.log("发送加入频道请求:", channelName);
 }
 // ======== 创建频道请求 ========
 function createChannel(channelName) {
-    const buffer = buildCreateChannelPacket(localStorage.get('userName'),channelName);
+    const buffer = buildCreateChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
     console.log("发送加入频道请求:", channelName);
@@ -133,7 +134,7 @@ function createChannel(channelName) {
 
 // ======== 删除频道请求 ========
 function deleteChannel(channelName) {
-    const buffer = buildDeleteChannelPacket(localStorage.get('userName'),channelName);
+    const buffer = buildDeleteChannelPacket(localStorage.getItem('userName'),channelName);
 
     ws.send(buffer);
     console.log("发送加入频道请求:", channelName);
@@ -179,7 +180,7 @@ function handleLoginResponse(payload) {
         console.log("登录验证成功:", payload.user);
         showLoginOverlay(false);
         // 可以初始化频道列表
-        initChannels(payload.data.channels);
+        initChannels(payload.data);
     } else {
         console.error("登录失败:", payload.data);
         alert("登录失败：" + payload.data);
@@ -188,13 +189,18 @@ function handleLoginResponse(payload) {
 // ======== 初始化频道列表 ========
 function initChannels(channels) {
     const channelList = document.getElementById("channelList");
+    const memberList = document.getElementById("memberList");
     channelList.innerHTML = "";
+    memberList.innerHTML = "";
 
-    for (const channelName in channels) {
+    for (const channel of channels) {
         const div = document.createElement("div");
         div.className = "channel-item";
-        div.textContent = channelName;
-        div.onclick = () => joinChannel(channelName);
+        div.textContent = channel.channel_name;
+        div.onclick = () => {
+            renderMemberList(channel.channel_name,channel.members);
+            document.getElementById("currentChannel").textContent = channel.channel_name;
+        };
         channelList.appendChild(div);
     }
 }
@@ -259,6 +265,27 @@ function renderMemberList(channel, users) {
         div.textContent = user;
         memberList.appendChild(div);
     });
+}
+
+
+// 将二进制转utf8字符串，因为erlang将字符串转成二进制
+function deepDecode(data) {
+    if (Array.isArray(data)) {
+        // 如果是字符码数组（都是数字）
+        if (data.every(x => typeof x === "number")) {
+            return String.fromCharCode(...data);
+        }
+        // 如果是嵌套数组
+        return data.map(deepDecode);
+    } else if (typeof data === "object" && data !== null) {
+        const result = {};
+        for (const key in data) {
+            result[key] = deepDecode(data[key]);
+        }
+        return result;
+    } else {
+        return data;
+    }
 }
 
 
