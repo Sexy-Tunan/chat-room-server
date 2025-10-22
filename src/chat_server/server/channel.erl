@@ -14,11 +14,10 @@
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3]).
 
 -include("../../../include/database/chat_database.hrl").
-
+-define(WORLD_CHANNEL_NAME, <<"world">>).
 
 start(ChannelName) ->
 	gen_server:start(?MODULE, [ChannelName], []).
-
 
 init([ChannelName]) ->
 	put(channelName, ChannelName),
@@ -90,7 +89,21 @@ handle_info(show_all,State) ->
 	lists:foreach(fun([Record]) -> io:format(">>>> [~ts] == ~p~n",[Record#user_pid.user_name,Record#user_pid.pid]) end, Records),
 	{noreply, State};
 
+handle_info(broadcast_shutdown, State) ->
+	%% 通知所有客户端断开连接，因为服务器要关闭了
+	case get(channelName) =:= ?WORLD_CHANNEL_NAME of
+		true ->
+			%% 世界频道通知所有客户端断联
+			io:format("世界频道开始通知所有客户端断联~n"),
+			PidList = ets:match(State, {'_','_','$1'}),
+			io:format("啦啦啦~p~n",[PidList]),
+			[Pid ! {broadcast_shutdown, everyone} || [Pid] <- PidList],
+			{stop, normal, State};
+		false -> {stop, normal, State}
+	end;
+
 handle_info(_Info, State) -> {noreply, State}.
+
 
 
 handle_call(_Res, _From, State) ->

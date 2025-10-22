@@ -46,7 +46,6 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 					%% 向已加入的频道注册自己的登录信息，以便频道信息广播能接收到
 					{ok,JoinChannelList} = database_queryer:query_joined_channel_info(UserName),
 					{ok,ChannelPidList} = channel_manager:query_channel_pid_batch(JoinChannelList),
-					io:format("啦啦啦~p~n",[ChannelPidList]),
 					[Pid ! {user_login_register,UserName,self()} || Pid <- ChannelPidList],
 
 			 	    {PayloadJsonBin,TempState};
@@ -187,6 +186,11 @@ websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
 	PacketLength = 2 + byte_size(PayloadJsonBin),
 	Packet = <<PacketLength:32/big-unsigned-integer, ?DELETE_CHANNEL_BROADCAST_PROTOCOL_NUMBER:16/big-unsigned-integer, PayloadJsonBin/binary>>,
 	{reply, {binary, Packet}, State};
+
+%% 接受频道广播消息 告知客户端删除频道信息
+websocket_info({broadcast_shutdown, everyone}, State) ->
+	io:format("用户[~ts]接收到服务停止断联消息~n",[maps:get(user,State)]),
+	exit(normal,self());
 
 websocket_info(_Info, State) ->
 	{ok, State}.

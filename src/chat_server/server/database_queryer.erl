@@ -15,7 +15,7 @@
 
 %% API
 -export([start/1,stop/0]).
--export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
+-export([init/1, handle_call/3, handle_info/2, handle_cast/2,terminate/2]).
 %% 用户api
 -export([add_user_record/2,query_user_message_by_user_name/1, query_user_message_by_channel_name/1]).
 %% 频道api
@@ -307,6 +307,14 @@ handle_call(stop, _From, State) ->
 
 handle_cast(_Msg, State) -> {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.
+
+
+terminate(_Reason, State) ->
+	%% 将数据写回Dets
+	#state{tables = Tables} = State,
+	io:format("接受到停止请求，开始将ets数据写回dets~n"),
+	write_ets_back_to_dets(Tables),
+	{stop, normal, stopped, State}.
 
 %% 将ets中的数据写回dets
 write_ets_back_to_dets(Tables) ->

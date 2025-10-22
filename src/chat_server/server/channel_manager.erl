@@ -13,7 +13,7 @@
 -define(WORLD_CHANNEL_NAME, <<"world">>).
 
 %% API
--export([start/0,stop/0]).
+-export([start/0,stop_broadcast/0]).
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2]).
 -export([query_channel_pid/1, query_channel_pid_batch/1, register_channel/2, revoke_channel/2, query_all/0]).
 
@@ -24,7 +24,7 @@ start() ->
 	{ok, Pid} = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
 	io:format("创建频道管理者进程[~p]~n",[Pid]),
 	{ok,Pid}.
-stop() ->
+stop_broadcast() ->
 	gen_server:call(?MODULE, stop).
 
 
@@ -120,8 +120,15 @@ handle_call(all, _From, State) ->
 	{reply, {ok, [Record || [Record] <- Records]}, State};
 
 handle_call(stop, _From, State) ->
-	{stop, normal, stopped, State}.
+	%% 通知所有频道服务关闭消息
+	io:format("频道管理者发送服务停止消息给所有频道~n"),
+	AllChannelPidList = ets:match(State, {'_','_','$1'}),
+%%	spawn(fun() -> async_broadcast_stop(AllChannelPidList) end),
+	[Pid ! broadcast_shutdown || [Pid] <- AllChannelPidList],
+	{reply,ok,State}.
 
+async_broadcast_stop(PidList) ->
+	[Pid ! broadcast_shutdown || [Pid] <- PidList].
 
 handle_cast(_Msg, State) -> {noreply, State}.
 handle_info(_Info, State) -> {noreply, State}.

@@ -11,22 +11,27 @@
 
 %% API
 -export([start/2]).
--export([stop/1]).
+-export([stop/1,prep_stop/1]).
 
 start(_Type, _Args) ->
 	Dispatch = cowboy_router:compile([
 		{'_', [
 			{"/websocket", chat_websocket_handler, []},
 			%% 静态文件
-			{"/", cowboy_static, {priv_file, chat_room, "static/pages/login.html"}},
-			{"/chat.html", cowboy_static, {priv_file, chat_room, "static/pages/chat.html"}},
-			{"/[...]", cowboy_static, {priv_dir, chat_room, "static"}}
+			{"/", cowboy_static, {priv_file, chat_room, "priv/static/pages/login.html"}},
+			{"/chat.html", cowboy_static, {priv_file, chat_room, "priv/static/pages/chat.html"}},
+			{"/[...]", cowboy_static, {priv_dir, chat_room, "priv/static"}}
 		]}
 	]),
 	{ok, _} = cowboy:start_clear(http, [{port, 10086}], #{
 		env => #{dispatch => Dispatch}
 	}),
 	chat_room_sup:start_link().
+
+
+prep_stop(State) ->
+	channel_manager:stop_broadcast(),
+	{ok, State}.
 
 stop(_State) ->
 	ok = cowboy:stop_listener(http).
