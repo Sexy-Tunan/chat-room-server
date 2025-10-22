@@ -95,9 +95,9 @@ handle_info(broadcast_shutdown, State) ->
 		true ->
 			%% 世界频道通知所有客户端断联
 			io:format("世界频道开始通知所有客户端断联~n"),
-			PidList = ets:match(State, {'_','_','$1'}),
-			io:format("啦啦啦~p~n",[PidList]),
-			[Pid ! {broadcast_shutdown, everyone} || [Pid] <- PidList],
+			AllUserPidList = ets:match(State, {'_','_','$1'}),
+			io:format("啦啦啦~p~n",[[Pid || [Pid] <- AllUserPidList]]),
+			[Pid ! {broadcast_shutdown, everyone} || [Pid] <- AllUserPidList],
 			{stop, normal, State};
 		false -> {stop, normal, State}
 	end;
@@ -108,3 +108,7 @@ handle_info(_Info, State) -> {noreply, State}.
 
 handle_call(_Res, _From, State) ->
 	{noreply, State}.
+
+terminate(_Reason, State) ->
+	io:format("频道[~ts]停止~n",[get(channelName)]),
+	ok.

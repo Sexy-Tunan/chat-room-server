@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(chat_room_app).
 -author("caigou").
-
+-behavior(application).
 %% API
 -export([start/2]).
 -export([stop/1,prep_stop/1]).
@@ -30,8 +30,9 @@ start(_Type, _Args) ->
 
 
 prep_stop(State) ->
-	channel_manager:stop_broadcast(),
-	{ok, State}.
+	channel_manager:broadcast_stop(),
+	State.
 
 stop(_State) ->
-	ok = cowboy:stop_listener(http).
+	cowboy:stop_listener(http).
+

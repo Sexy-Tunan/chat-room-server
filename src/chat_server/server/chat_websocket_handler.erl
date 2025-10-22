@@ -38,7 +38,7 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 %%			io:format("jsx:decode解析出来的值是二进制？：~p",[is_binary(UserName)]),
 			{PayloadJsonBin,NewState} = case login_check(DataMap) of
 			    true ->
-					io:format("用户[~ts]登录成功~n",[UserName]),
+					io:format("用户[~ts]登录成功~p~n",[UserName,self()]),
 					TempState = State#{login_state => true, user => UserName},
 			 	    %% 查询数据库该用户加入了哪些频道，这些频道有哪些用户
 					{ok,AllChannelInfoWithMembers} = database_queryer:query_all_channel_info_with_members(),
@@ -77,7 +77,7 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			{ok, State};
 
 		%% 用户创建频道
-		?CHANNEL_CREAT_REQUEST_PROTOCOL_NUMBER ->
+		?CHANNEL_CREATE_REQUEST_PROTOCOL_NUMBER ->
 			%% 向频道管理者发送新增频道消息
 			Creator = maps:get(user,DataMap),
 			ChannelName = maps:get(channel,DataMap),
@@ -190,7 +190,7 @@ websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
 %% 接受频道广播消息 告知客户端删除频道信息
 websocket_info({broadcast_shutdown, everyone}, State) ->
 	io:format("用户[~ts]接收到服务停止断联消息~n",[maps:get(user,State)]),
-	exit(normal,self());
+	{stop, normal, State};
 
 websocket_info(_Info, State) ->
 	{ok, State}.

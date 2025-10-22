@@ -314,7 +314,7 @@ terminate(_Reason, State) ->
 	#state{tables = Tables} = State,
 	io:format("接受到停止请求，开始将ets数据写回dets~n"),
 	write_ets_back_to_dets(Tables),
-	{stop, normal, stopped, State}.
+	ok.
 
 %% 将ets中的数据写回dets
 write_ets_back_to_dets(Tables) ->

@@ -24,20 +24,20 @@ init([]) ->
 			%% Children
 			[
 				{
-					tag1,
+					database_queryer,
 					{database_queryer, start, [true]},
-					permanent,
+					transient,
 					10000,
 					worker,
-					[area_server]
+					[database_queryer]
 				},
 				{
-					tag2,
+					channel_manager,
 					{channel_manager, start, []},
-					permanent,
+					transient,
 					10000,
 					worker,
-					[prime_server]
+					[channel_manager]
 				}
 			]
 		}
