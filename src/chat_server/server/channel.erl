@@ -96,7 +96,6 @@ handle_info(broadcast_shutdown, State) ->
 			%% 世界频道通知所有客户端断联
 			io:format("世界频道开始通知所有客户端断联~n"),
 			AllUserPidList = ets:match(State, {'_','_','$1'}),
-			io:format("啦啦啦~p~n",[[Pid || [Pid] <- AllUserPidList]]),
 			[Pid ! {broadcast_shutdown, everyone} || [Pid] <- AllUserPidList],
 			{stop, normal, State};
 		false -> {stop, normal, State}

@@ -251,6 +251,7 @@ function handleLoginResponse(payload) {
     } else {
         console.error("登录失败:", payload.data);
         alert("登录失败：" + payload.data);
+		window.location.href = './';
     }
 }
 // ======== 初始化频道列表,并将信息保存到全局对象中 ========

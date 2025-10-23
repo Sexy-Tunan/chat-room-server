@@ -12,7 +12,7 @@
 -export([init/2]).
 -export([websocket_init/1]).
 -export([websocket_handle/2]).
--export([websocket_info/2]).
+-export([websocket_info/2,terminate/3]).
 
 -include("../../../include/protocol/chat_protocol.hrl").
 -include("../../../include/database/chat_database.hrl").
@@ -23,8 +23,8 @@ init(Req, _Opt) ->
 	{cowboy_websocket, Req, #{}}.
 
 websocket_init(State) ->
+%%	process_flag(trap_exit, true),
 	io:format("升级成功,客户端与服务器建立websocket连接~n"),
-	erlang:start_timer(1000, self(), <<"Hello!">>),
 	{ok, State}.
 
 %% 处理用户发送来的消息,无需回复，因为这些消息频道都会广播给对应的用户，当然就包括了处理这条消息的用户
@@ -215,22 +215,16 @@ websocket_info({delete_channel, Deleter, DeletedChannelName}, State) ->
 %% 接受频道广播消息 告知客户端删除频道信息
 websocket_info({broadcast_shutdown, everyone}, State) ->
 	io:format("用户[~ts]接收到服务停止断联消息~n",[maps:get(user,State)]),
-	{stop, normal, State};
+	{stop, State};
 
 websocket_info(_Info, State) ->
 	{ok, State}.
 
 terminate(_Reason, PartialReq, State) ->
-	io:format("断联~n"),
-	%% 查询自己已加入的频道有哪些
-	JoinChannelList = database_queryer:query_joined_channel_info(maps:get(user,State)),
-	case length(JoinChannelList) > 0 of
-		true ->
-			%% 向频道注销自己的登录信息
-			{ok,ChannelPidList} = channel_manager:query_channel_pid_batch(JoinChannelList),
-			UserName = maps:get(user, State),
-			[Pid ! {user_revoke,UserName} || Pid <- ChannelPidList];
-		false -> do_nothing
+	%% 此处可做断联前的清理或者保存之类的工作
+	case maps:get(user,State, undefined) of
+		UserName -> io:format("断开用户[~ts]的连接~n",[UserName]);
+		undefined -> io:format("断开连接~n")
 	end,
 	ok.
 

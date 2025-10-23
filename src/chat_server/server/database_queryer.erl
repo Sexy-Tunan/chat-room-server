@@ -87,7 +87,10 @@ query_joined_channel_info(UserName) -> gen_server:call(?MODULE,{query_joined_cha
 %% ====================================================================
 %% 初始化方法
 init([IsNeedInitData]) ->
+
+	%% 表示希望捕获退出信号，而不是被动退出
 	process_flag(trap_exit, true),
+
 	%% 从dets数据库中查出数据加载到ets
 	%% 定义所有表的元信息
 	TablesInfo = [
@@ -300,9 +303,9 @@ handle_call({query_joined_channel_info, TableName, User}, _From, State) ->
 	end;
 
 handle_call(stop, _From, State) ->
-	#state{tables = Tables} = State,
-	io:format("接受到停止请求，开始将ets数据写回dets~n"),
-	write_ets_back_to_dets(Tables),
+%%	#state{tables = Tables} = State,
+%%	io:format("接受到停止请求，开始将ets数据写回dets~n"),
+%%	write_ets_back_to_dets(Tables),
 	{stop, normal, stopped, State}.
 
 

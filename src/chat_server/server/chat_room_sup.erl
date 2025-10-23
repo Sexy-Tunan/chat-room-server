@@ -27,7 +27,7 @@ init([]) ->
 					database_queryer,
 					{database_queryer, start, [true]},
 					transient,
-					10000,
+					20000,
 					worker,
 					[database_queryer]
 				},
