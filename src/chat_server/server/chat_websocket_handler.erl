@@ -39,7 +39,7 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			{PayloadJsonBin,NewState} = case login_check(DataMap) of
 			    true ->
 					io:format("用户[~ts]登录成功~p~n",[UserName,self()]),
-					TempState = State#{login_state => true, user => UserName},
+					TempState = State#{login_state => true, user => UserName, last_world_send_time => 0},
 			 	    %% 查询数据库该用户加入了哪些频道，这些频道有哪些用户
 					{ok,AllChannelInfoWithMembers} = database_queryer:query_all_channel_info_with_members(),
 			 	    PayloadJsonBin = jsx:encode(#{state => true, user => UserName, data => AllChannelInfoWithMembers}),
@@ -71,10 +71,35 @@ websocket_handle({binary, <<_:32/big-unsigned, ProtoId:16/big-unsigned, JsonBin/
 			Sender = maps:get(sender,DataMap),
 			ChannelName = maps:get(channel,DataMap),
 			Message = maps:get(message,DataMap),
-			io:format("用户[~ts]往[~ts]频道发送了消息[~ts]~n",[Sender,ChannelName,Message]),
-			{ok, ChannelPid} = channel_manager:query_channel_pid(ChannelName),
-			ChannelPid ! {msg, Sender, Message},
-			{ok, State};
+			%% 增加世界频道发言时间限制
+			case ChannelName =:= <<"world">> of
+				true -> %%如果是世界频道需判断发言时间
+					LastWorldSendTime = maps:get(last_world_send_time,State),
+					io:format("系统当前时间:~p",[erlang:system_time()]),
+					io:format("上次发言时间:~p",[LastWorldSendTime]),
+					case (erlang:system_time(second) - LastWorldSendTime) > 10 of
+						true ->
+							io:format("用户[~ts]往[~ts]频道发送了消息[~ts]~n",[Sender,ChannelName,Message]),
+							{ok, ChannelPid} = channel_manager:query_channel_pid(ChannelName),
+							ChannelPid ! {msg, Sender, Message},
+							{ok, State#{last_world_send_time => erlang:system_time(second)}};
+						false ->
+							io:format("用户[~ts]在十秒内往[~ts]频道发送了多次消息~n",[Sender,ChannelName]),
+							PayloadJsonBin = jsx:encode(#{state => false, reason => unicode:characters_to_binary("世界频道只允许十秒发言一次",utf8,utf8)}),
+							PacketLength = 2 + byte_size(PayloadJsonBin),
+							Packet = <<
+								PacketLength:32/big-unsigned-integer,
+								?LIMIT_WORLD_SEND_PROTOCOL_NUMBER:16/big-unsigned-integer,
+								PayloadJsonBin/binary
+							>>,
+							{reply, {binary,Packet},State}
+					end;
+				false ->
+					io:format("用户[~ts]往[~ts]频道发送了消息[~ts]~n",[Sender,ChannelName,Message]),
+					{ok, ChannelPid} = channel_manager:query_channel_pid(ChannelName),
+					ChannelPid ! {msg, Sender, Message},
+					{ok, State}
+			end;
 
 		%% 用户创建频道
 		?CHANNEL_CREATE_REQUEST_PROTOCOL_NUMBER ->
@@ -221,5 +246,8 @@ login_check(DataMap) ->
 			%% 用户不存在，为其注册
 			io:format("用户[~s]不存在，为其进行注册~n",[unicode:characters_to_list(UserName,utf8)]),
 			database_queryer:add_user_record(UserName,Password),
+			database_queryer:add_channel_user_record(UserName, <<"world">>),
+			{ok,WorldChannelPid} = channel_manager:query_channel_pid(<<"world">>),
+			WorldChannelPid ! {user_join_register, UserName, self()},
 			true
 	end.

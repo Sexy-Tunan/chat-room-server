@@ -74,15 +74,17 @@ function sendMessage() {
     ws.send(buffer);
 
     // 本地渲染自己的消息
-    const messageList = document.getElementById("messageList");
-    const div = document.createElement("div");
-    div.className = "message user";
-    div.innerHTML = `<span class="username">你</span>: ${message}`;
-    messageList.appendChild(div);
-    messageList.scrollTop = messageList.scrollHeight;
+//    const messageList = document.getElementById("messageList");
+//    const div = document.createElement("div");
+//    div.className = "message user";
+//    div.innerHTML = `<span class="username">你</span>: ${message}`;
+//    messageList.appendChild(div);
+//    messageList.scrollTop = messageList.scrollHeight;
 
     messageInput.value = "";
 }
+
+
 
 
 
@@ -198,6 +200,9 @@ function handleServerPacket(parsedPacket) {
         case PROTOCOL.JOIN_CHANNEL_RESPONSE:
             handleJoinChannelResponse(parsedPacket.data);
             break;
+        case PROTOCOL.LIMIT_WORLD_SEND:
+            handleLimitWorldSend(parsedPacket.data);
+            break;
         case PROTOCOL.MSG_BROADCAST:
             handleMsgBroadcast(parsedPacket.data);
             break;
@@ -214,7 +219,7 @@ function handleServerPacket(parsedPacket) {
             handleQuitChannelBroadcast(parsedPacket.data);
             break;
         default:
-            console.warn("未知协议号:", protocolNumber);
+            console.warn("未知协议号:", parsedPacket.protocolNumber);
     }
 }
 
@@ -310,6 +315,12 @@ function showChannel(channelName) {
         renderMessages([], true, channelName); // 显示提示遮罩
     }
 }
+
+function handleLimitWorldSend(payload){
+    console.log("处理世界频道发言限制响应");
+    window.alert(payload.reason);
+}
+
 
 function handleJoinChannelResponse(payload){
     console.log("处理加入频道响应");

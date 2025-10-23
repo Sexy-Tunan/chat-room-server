@@ -87,6 +87,7 @@ query_joined_channel_info(UserName) -> gen_server:call(?MODULE,{query_joined_cha
 %% ====================================================================
 %% 初始化方法
 init([IsNeedInitData]) ->
+	process_flag(trap_exit, true),
 	%% 从dets数据库中查出数据加载到ets
 	%% 定义所有表的元信息
 	TablesInfo = [
